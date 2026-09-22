@@ -25,7 +25,7 @@ try {
   process.exit(1);
 }
 
-const app = createApp();
+const app = createApp(config);
 
 app.listen(config.port, (error) => {
   if (error) {
