@@ -13,5 +13,5 @@ export async function createChatCompletion(options: {
         body: JSON.stringify(options.body),
     });
 
-    return { status: response.status, body: await response.text() };
+    return { status: response.status, body: await response.text() }
 }

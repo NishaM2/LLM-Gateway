@@ -3,24 +3,24 @@ export type Config = {
   databaseUrl: string;
   groqApiKey: string;
   geminiApiKey: string;
-};
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
-  const problems: string[] = [];
+  const problems: string[] = []
 
   function required(name: string): string {
-    const value = env[name]?.trim();
+    const value = env[name]?.trim()
     if (!value) {
       problems.push(`${name} is missing`);
-      return "";
+      return ""
     }
-    return value;
+    return value
   }
 
-  const rawPort = env.PORT?.trim() || "3000";
-  const port = Number(rawPort);
+  const rawPort = env.PORT?.trim() || "3000"
+  const port = Number(rawPort)
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    problems.push(`PORT must be a whole number from 1 to 65535 (got "${rawPort}")`);
+    problems.push(`PORT must be a whole number from 1 to 65535 (got "${rawPort}")`)
   }
 
   const config: Config = {
@@ -37,5 +37,5 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     );
   }
 
-  return config;
+  return config
 }

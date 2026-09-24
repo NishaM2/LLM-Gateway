@@ -1,0 +1,6 @@
+{
+  "model": "openai/gpt-oss-20b",
+  "messages": [
+    { "role": "robot", "content": "Hi" }
+  ]
+}
