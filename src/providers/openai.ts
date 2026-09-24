@@ -1,17 +1,16 @@
-// Talks to any service that speaks OpenAI's chat format. Groq is one of them.
-export async function createChatCompletion(options: {
+// Hands back the provider's reply as it is, so the caller can either read it all at once
+// or pass it on piece by piece while it is still arriving.
+export function createChatCompletion(options: {
     baseUrl: string;
     apiKey: string;
     body: unknown;
-}): Promise<{ status: number; body: string }> {
-    const response = await fetch(`${options.baseUrl}/chat/completions`, {
+}): Promise<Response> {
+    return fetch(`${options.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${options.apiKey}`,
         },
         body: JSON.stringify(options.body),
-    });
-
-    return { status: response.status, body: await response.text() }
+    })
 }

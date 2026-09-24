@@ -14,6 +14,7 @@ export const chatRequestSchema = z.looseObject(
         messages: z
             .array(message, { error: "is required and must be a list of messages" })
             .min(1, { error: "must contain at least one message" }),
+        stream: z.boolean({ error: "must be true or false" }).optional(),
     },
     { error: "The request body must be a JSON object" },
 )
