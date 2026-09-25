@@ -1,6 +1,6 @@
 import express from "express"
 import type { Config } from "../config.ts"
-import { createChatCompletion } from "../providers/openai.ts"
+import { createChatCompletion, describeCause, describeProviderFailure } from "../providers/openai.ts"
 import { chatRequestSchema, describeProblem } from "../schemas/chatRequest.ts"
 
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
@@ -25,12 +25,13 @@ export function chatRouter(config: Config): express.Router {
                 code: null,
                 },
             })
-            return;
+            return
         }
 
         const wantsStream = result.data.stream === true
         console.log(`Forwarding to Groq: ${result.data.model}${wantsStream ? " (streaming)" : ""}`)
 
+        // If this fails to reach the provider at all, it throws and the error handler answers
         const upstream = await createChatCompletion({
             baseUrl: GROQ_BASE_URL,
             apiKey: config.groqApiKey,
@@ -38,10 +39,14 @@ export function chatRouter(config: Config): express.Router {
         })
 
         // A failed request answers with ordinary JSON even when streaming was asked for.
-        if (!wantsStream || !upstream.ok || !upstream.body) {
-            const body = await upstream.text();
-            res.status(upstream.status).type("application/json").send(body);
-            return;
+        if (!upstream.ok) {
+            throw describeProviderFailure(upstream.status, await upstream.text())
+        }
+
+        if (!wantsStream || !upstream.body) {
+            const body = await upstream.text()
+            res.status(upstream.status).type("application/json").send(body)
+            return
         }
 
         // Open the stream to the caller before any text has arrived.
@@ -62,14 +67,50 @@ export function chatRouter(config: Config): express.Router {
 
         const collected = createTextCollector()
 
-        // Pass every piece on the moment it arrives. Never wait for the whole answer.
-        for await (const chunk of upstream.body) {
-            res.write(chunk)
-            collected.add(chunk)
+        // Read the answer one piece at a time. Holding the reader ourselves is what lets us stop early further down.
+        const reader = upstream.body.getReader()
+
+        // If the caller hangs up, stop pulling from the provider instead of paying for
+        // an answer nobody will read.
+        let callerLeft = false
+        res.on("close", () => {
+            if (!res.writableEnded) {
+                callerLeft = true;
+                void reader.cancel().catch(() => {})
+            }
+        })
+
+        try {
+        // Pass every piece on the moment it arrives, then keep a copy for ourselves.
+        while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            res.write(value)
+            collected.add(value)
+        }
+
+        // Cancelling the reader ends the loop quietly, so check before calling this a full answer.
+        if (callerLeft) {
+            console.log(`Caller hung up after ${collected.text.length} characters. Stopped the provider.`)
+            return
         }
 
         res.end()
-        console.log(`Full answer (${collected.text.length} characters): ${collected.text}`)
+            console.log(`Full answer (${collected.text.length} characters): ${collected.text}`)
+        } catch (error) {
+            if (callerLeft) {
+                console.log(`Caller hung up after ${collected.text.length} characters. Stopped the provider.`)
+                return
+            }
+
+            // The caller already holds part of the answer, so the status cannot be changed now.
+            // All we can do is say the stream broke, and never keep an incomplete answer.
+            console.error(`Stream broke after ${collected.text.length} characters: ${describeCause(error)}`)
+            if (!res.writableEnded) {
+                res.write(`data: ${JSON.stringify({ error: { message: "The stream ended early.", type: "upstream_error" } })}\n\n`)
+                res.end()
+            }
+        }
     })
 
     return router
@@ -77,25 +118,25 @@ export function chatRouter(config: Config): express.Router {
 
 // Watches the pieces fly past and builds up the answer text without slowing them down
 function createTextCollector() {
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let text = "";
+    const decoder = new TextDecoder()
+    let buffer = ""
+    let text = ""
 
     return {
         add(chunk: Uint8Array) {
             // A network piece can hold half an event, or several, so keep the leftover for next time.
-            buffer += decoder.decode(chunk, { stream: true });
-            const events = buffer.split(/\r?\n\r?\n/);
-            buffer = events.pop() ?? "";
+            buffer += decoder.decode(chunk, { stream: true })
+            const events = buffer.split(/\r?\n\r?\n/)
+            buffer = events.pop() ?? ""
 
             for (const event of events) {
                 for (const line of event.split(/\r?\n/)) {
-                    if (!line.startsWith("data:")) continue;
-                    const payload = line.slice(5).trim();
-                    if (payload === "[DONE]") continue;
+                    if (!line.startsWith("data:")) continue
+                    const payload = line.slice(5).trim()
+                    if (payload === "[DONE]") continue
                     try {
-                        const piece = JSON.parse(payload)?.choices?.[0]?.delta?.content;
-                        if (typeof piece === "string") text += piece;
+                        const piece = JSON.parse(payload)?.choices?.[0]?.delta?.content
+                        if (typeof piece === "string") text += piece
                     } catch {
                         // One unreadable piece is not worth killing a live stream for.
                     }
@@ -103,7 +144,7 @@ function createTextCollector() {
             }
         },
         get text() {
-            return text;
+            return text
         }
     }
 }

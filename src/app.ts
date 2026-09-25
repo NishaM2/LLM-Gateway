@@ -1,6 +1,7 @@
 import express from "express"
 import type { Config } from "./config.ts"
 import { chatRouter } from "./routes/chat.ts"
+import { errorHandler } from "./middleware/errorHandler.ts"
 
 export function createApp(config: Config) {
   const app = express()
@@ -12,6 +13,7 @@ export function createApp(config: Config) {
   });
 
   app.use(chatRouter(config))
+  app.use(errorHandler)
 
   return app
 }
