@@ -2,7 +2,7 @@ import express from "express"
 import type { Config } from "../config.ts"
 import { createChatCompletion, describeCause, describeProviderFailure, parseJson, readUsage, type Usage } from "../providers/openai.ts"
 import { chatRequestSchema, describeProblem } from "../schemas/chatRequest.ts"
-import { note } from "../services/requestLogger.ts"
+import { elapsedMs, note } from "../services/requestLogger.ts"
 
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
@@ -58,6 +58,8 @@ export function chatRouter(config: Config): express.Router {
     const collected = createStreamCollector()
     const reader = upstream.body.getReader()
 
+    let firstChunkSent = false
+
     let callerLeft = false
     res.on("close", () => {
       if (!res.writableEnded) {
@@ -70,6 +72,12 @@ export function chatRouter(config: Config): express.Router {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
+
+        if (!firstChunkSent) {
+          firstChunkSent = true
+          note(res, { ttftMs: elapsedMs(res) })
+        }
+
         res.write(value)
         collected.add(value)
       }
