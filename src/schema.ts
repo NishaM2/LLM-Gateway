@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import { integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
 
 export const requestStatus = pgEnum("request_status", ["ok", "error", "fallback"])
 
@@ -9,4 +9,6 @@ export const requests = pgTable("requests", {
   provider: text("provider"),
   status: requestStatus("status").notNull(),
   errorCode: text("error_code"),
+  inputTokens: integer("input_tokens"),
+  outputTokens: integer("output_tokens"),
 })

@@ -1,5 +1,5 @@
-import pg from "pg"
 import { drizzle } from "drizzle-orm/node-postgres"
+import pg from "pg"
 
 export function createPool(databaseUrl: string): pg.Pool {
   const pool = new pg.Pool({

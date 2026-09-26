@@ -1,0 +1,8 @@
+{
+  "model": "openai/gpt-oss-20b",
+  "messages": [
+    { "role": "system", "content": "You are brief." },
+    { "role": "user", "content": "Write four short sentences about the sea." }
+  ],
+  "max_tokens": 1000
+}
