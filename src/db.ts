@@ -1,15 +1,16 @@
 import pg from "pg"
+import { drizzle } from "drizzle-orm/node-postgres"
 
 export function createPool(databaseUrl: string): pg.Pool {
   const pool = new pg.Pool({
     connectionString: databaseUrl,
     max: 10,
     connectionTimeoutMillis: 5_000,
-  });
+  })
 
   pool.on("error", (error) => {
     console.error(`Postgres connection dropped: ${error.message}`)
-  });
+  })
 
   return pool
 }
@@ -33,3 +34,9 @@ function describeError(error: unknown): string {
   }
   return String(error)
 }
+
+export function createDb(pool: pg.Pool) {
+  return drizzle(pool);
+}
+
+export type Db = ReturnType<typeof createDb>

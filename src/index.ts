@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs"
 import { createApp } from "./app.ts"
 import { loadConfig, type Config } from "./config.ts"
-import { checkDatabase, createPool } from "./db.ts"
+import { checkDatabase, createDb, createPool } from "./db.ts"
 
 if (existsSync(".env")) {
   process.loadEnvFile(".env")
@@ -25,7 +25,9 @@ try {
   process.exit(1)
 }
 
-const app = createApp(config)
+const db = createDb(pool)
+const app = createApp(config, db)
+
 
 app.listen(config.port, (error) => {
   if (error) {

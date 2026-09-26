@@ -1,0 +1,6 @@
+{
+  "model": "does-not-exist",
+  "messages": [
+    { "role": "user", "content": "Hi" }
+  ]
+}
