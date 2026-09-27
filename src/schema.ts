@@ -28,3 +28,21 @@ export const modelPrices = pgTable(
   },
   (table) => [uniqueIndex("model_prices_unique").on(table.provider, table.model, table.effectiveFrom)],
 )
+
+export const tenants = pgTable("tenants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  name: text("name").notNull(),
+  monthlyBudgetMicros: integer("monthly_budget_micros").notNull(),
+})
+
+export const apiKeys = pgTable("api_keys", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id),
+  keyHash: text("key_hash").notNull().unique(),
+  label: text("label").notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+})

@@ -12,7 +12,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "tenant:create": "tsx src/scripts/createTenant.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",

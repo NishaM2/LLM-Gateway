@@ -29,6 +29,13 @@
       "when": 1790441480557,
       "tag": "0003_cost_and_timings",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790528521471,
+      "tag": "0004_tenants_keys",
+      "breakpoints": true
     }
   ]
 }
