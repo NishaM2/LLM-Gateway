@@ -3,6 +3,7 @@ import { loadConfig } from "../config.ts"
 import { createDb, createPool } from "../db.ts"
 import { apiKeys, tenants } from "../schema.ts"
 import { hashApiKey, newApiKey } from "../services/apiKeys.ts"
+import { formatMicros } from "../services/usage.ts"
 
 if (existsSync(".env")) {
   process.loadEnvFile(".env")
@@ -23,6 +24,8 @@ if (!Number.isFinite(budgetDollars) || budgetDollars <= 0) {
   process.exit(1)
 }
 
+const budgetMicros = Math.round(budgetDollars * 1_000_000)
+
 const config = loadConfig(process.env)
 const pool = createPool(config.databaseUrl)
 const db = createDb(pool)
@@ -30,7 +33,7 @@ const db = createDb(pool)
 try {
   const [tenant] = await db
     .insert(tenants)
-    .values({ name, monthlyBudgetMicros: Math.round(budgetDollars * 1_000_000) })
+    .values({ name, monthlyBudgetMicros: budgetMicros })
     .returning()
 
   if (!tenant) {
@@ -43,7 +46,7 @@ try {
   console.log(`Tenant created`)
   console.log(`  id      ${tenant.id}`)
   console.log(`  name    ${tenant.name}`)
-  console.log(`  budget  $${budgetDollars.toFixed(2)} per month`)
+  console.log(`  budget  ${formatMicros(budgetMicros)} per month`)
   console.log(`  label   ${label}`)
   console.log(``)
   console.log(`API key, shown once only, save it now:`)
