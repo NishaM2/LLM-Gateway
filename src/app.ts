@@ -1,6 +1,7 @@
 import express from "express"
 import type { Config } from "./config.ts"
 import type { Db } from "./db.ts"
+import { requireApiKey } from "./middleware/auth.ts"
 import { errorHandler } from "./middleware/errorHandler.ts"
 import { chatRouter } from "./routes/chat.ts"
 import { requestLogging } from "./services/requestLogger.ts"
@@ -15,6 +16,8 @@ export function createApp(config: Config, db: Db) {
   })
 
   app.use(requestLogging(db))
+
+  app.use(requireApiKey(db))
 
   app.use(chatRouter(config))
 

@@ -1,0 +1,2 @@
+ALTER TABLE "requests" ADD COLUMN "tenant_id" uuid;--> statement-breakpoint
+ALTER TABLE "requests" ADD CONSTRAINT "requests_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;

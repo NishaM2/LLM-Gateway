@@ -36,6 +36,13 @@
       "when": 1790528521471,
       "tag": "0004_tenants_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790529224487,
+      "tag": "0005_request_tenant",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import { requests } from "../schema.ts"
 import { priceRequest } from "./pricing.ts"
 
 export type RequestLog = {
+  tenantId: string | null
   modelRequested: string | null
   provider: string | null
   status: "ok" | "error" | "fallback"
@@ -17,6 +18,7 @@ export type RequestLog = {
 export function requestLogging(db: Db) {
   return function (_req: Request, res: Response, next: NextFunction): void {
     const entry: RequestLog = {
+      tenantId: null,
       modelRequested: null,
       provider: null,
       status: "ok",
