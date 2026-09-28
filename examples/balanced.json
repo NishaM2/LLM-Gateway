@@ -1,0 +1,8 @@
+{
+  "model": "balanced",
+  "messages": [
+    { "role": "system", "content": "You are brief." },
+    { "role": "user", "content": "Say hello in five words." }
+  ],
+  "max_tokens": 2000
+}

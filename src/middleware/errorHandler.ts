@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express"
-import { ProviderError } from "../providers/openai.ts"
+import { ProviderError } from "../providers/types.ts"
 import { note } from "../services/requestLogger.ts"
 
 export function errorHandler(error: unknown, _req: Request, res: Response, next: NextFunction): void {

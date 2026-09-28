@@ -1,106 +1,52 @@
-// Maximum time to wait for the provider to start responding (30 seconds)
-const START_TIMEOUT_MS = 30_000
+import type { ProviderName } from "../models.ts"
+import { describeProviderFailure, fetchWithTimeout, toNumber } from "./shared.ts"
+import type { ProviderAdapter, ProviderCall, ProviderReply, Usage } from "./types.ts"
 
-export class ProviderError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string,
-    readonly detail: string,
-    readonly retryable: boolean,
-  ) {
-    super(message)
-    this.name = "ProviderError"
-  }
-}
-
-export type Usage = {
-  inputTokens: number | null
-  outputTokens: number | null
-}
-
-export async function createChatCompletion(options: {
+export function createOpenAiProvider(options: {
+  name: ProviderName
   baseUrl: string
   apiKey: string
-  body: unknown
-}): Promise<Response> {
+}): ProviderAdapter {
+  return {
+    name: options.name,
 
-  // Create a controller that can cancel the outgoing HTTP request
-  const controller = new AbortController()
+    async send(call: ProviderCall): Promise<ProviderReply> {
+      const body = {
+        ...call.body,
+        model: call.model,
+        stream: call.stream,
+        ...(call.stream ? { stream_options: { include_usage: true } } : {}),
+      }
 
-  // Schedule cancellation if the request takes longer than 30 seconds
-  const timer = setTimeout(() => controller.abort(), START_TIMEOUT_MS)
+      const response = await fetchWithTimeout(`${options.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${options.apiKey}`,
+        },
+        body: JSON.stringify(body),
+      })
 
-  try {
-    return await fetch(`${options.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${options.apiKey}`,
-      },
-      body: JSON.stringify(options.body),
-      signal: controller.signal,
-    })
-  } catch (error) {
-    if (controller.signal.aborted) {
-      throw new ProviderError(504, "provider_timeout", "The provider took too long to answer.", `Provider did not start answering within ${START_TIMEOUT_MS}ms`, true)
-    }
-    throw new ProviderError(502, "provider_unreachable", "The provider could not be reached.", `Could not reach the provider: ${describeCause(error)}`, true)
-  } finally {
-    clearTimeout(timer)
+      if (!response.ok) {
+        throw describeProviderFailure(response.status, await response.text())
+      }
+
+      if (call.stream && response.body) {
+        return { bodyText: null, stream: response.body }
+      }
+
+      return { bodyText: await response.text(), stream: null }
+    },
   }
 }
 
-export function describeProviderFailure(status: number, body: string): ProviderError {
-  const message = extractMessage(body)
-
-  if (status === 401 || status === 403) {
-    return new ProviderError(500, "gateway_misconfigured", "The gateway is not set up correctly.", `Provider rejected the gateway API key (${status}): ${message}`, false)
-  }
-  if (status === 429) {
-    return new ProviderError(429, "provider_rate_limited", "The provider is rate limiting this gateway. Please try again shortly.", `Provider rate limit (429): ${message}`, true)
-  }
-  if (status >= 500) {
-    return new ProviderError(502, "provider_error", `The provider failed: ${message}`, `Provider server error (${status}): ${message}`, true)
-  }
-  return new ProviderError(status, "request_rejected", message, `Provider rejected the request (${status}): ${message}`, false)
-}
-
-// Extracts input and output token counts from a provider's response payload
 export function readUsage(payload: any): Usage | null {
   const usage = payload?.usage
   if (!usage) return null
 
-  const inputTokens = typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : null
-  const outputTokens = typeof usage.completion_tokens === "number" ? usage.completion_tokens : null
+  const inputTokens = toNumber(usage.prompt_tokens)
+  const outputTokens = toNumber(usage.completion_tokens)
   if (inputTokens === null && outputTokens === null) return null
 
   return { inputTokens, outputTokens }
-}
-
-export function parseJson(text: string): any {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
-}
-
-function extractMessage(body: string): string {
-  const parsed = parseJson(body)
-  if (typeof parsed?.error?.message === "string") return parsed.error.message
-  return body.slice(0, 200) || "no details given"
-}
-
-// Converts an unknown error into a readable description, including its cause when available
-export function describeCause(error: unknown): string {
-  if (!(error instanceof Error)) return String(error)
-
-  const cause = (error as { cause?: unknown }).cause
-  if (cause instanceof AggregateError) {
-    return cause.errors.map((inner) => (inner instanceof Error ? inner.message : String(inner))).join("; ")
-  }
-  if (cause instanceof Error) return cause.message
-
-  return error.message
 }

@@ -4,6 +4,7 @@ import type { Db } from "./db.ts"
 import { requireApiKey } from "./middleware/auth.ts"
 import { enforceBudget } from "./middleware/budget.ts"
 import { errorHandler } from "./middleware/errorHandler.ts"
+import { createProviders } from "./providers/registry.ts"
 import { chatRouter } from "./routes/chat.ts"
 import { requestLogging } from "./services/requestLogger.ts"
 
@@ -22,7 +23,7 @@ export function createApp(config: Config, db: Db) {
 
   app.use(enforceBudget(db))
 
-  app.use(chatRouter(config))
+  app.use(chatRouter(createProviders(config)))
 
   app.use(errorHandler)
 

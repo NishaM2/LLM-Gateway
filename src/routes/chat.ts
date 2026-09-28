@@ -1,13 +1,13 @@
 import express from "express"
-import type { Config } from "../config.ts"
-import { createChatCompletion, describeCause, describeProviderFailure, parseJson, readUsage, type Usage } from "../providers/openai.ts"
 import { resolveModel } from "../models.ts"
+import { readUsage } from "../providers/openai.ts"
+import type { Providers } from "../providers/registry.ts"
+import { describeCause, parseJson } from "../providers/shared.ts"
+import type { Usage } from "../providers/types.ts"
 import { chatRequestSchema, describeProblem } from "../schemas/chatRequest.ts"
 import { elapsedMs, note } from "../services/requestLogger.ts"
 
-const GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-
-export function chatRouter(config: Config): express.Router {
+export function chatRouter(providers: Providers): express.Router {
   const router = express.Router()
 
   router.post("/v1/chat/completions", async (req, res) => {
@@ -32,23 +32,17 @@ export function chatRouter(config: Config): express.Router {
     note(res, { modelRequested: result.data.model, modelServed: target.model, provider: target.provider })
     console.log(`Forwarding to ${target.provider}: asked for "${result.data.model}", serving "${target.model}"${wantsStream ? " (streaming)" : ""}`)
 
-    const outgoing = { ...result.data, model: target.model }
-
-    const upstream = await createChatCompletion({
-      baseUrl: GROQ_BASE_URL,
-      apiKey: config.groqApiKey,
-      body: wantsStream ? { ...outgoing, stream_options: { include_usage: true } } : outgoing,
+    const reply = await providers[target.provider].send({
+      model: target.model,
+      body: result.data,
+      stream: wantsStream,
     })
 
-    if (!upstream.ok) {
-      throw describeProviderFailure(upstream.status, await upstream.text())
-    }
-
-    if (!wantsStream || !upstream.body) {
-      const body = await upstream.text()
+    if (!wantsStream || !reply.stream) {
+      const body = reply.bodyText ?? ""
       const usage = readUsage(parseJson(body))
       if (usage) note(res, usage)
-      res.status(upstream.status).type("application/json").send(body)
+      res.status(200).type("application/json").send(body)
       return
     }
 
@@ -60,7 +54,7 @@ export function chatRouter(config: Config): express.Router {
     res.flushHeaders()
 
     const collected = createStreamCollector()
-    const reader = upstream.body.getReader()
+    const reader = reply.stream.getReader()
 
     let firstChunkSent = false
 
