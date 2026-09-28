@@ -17,6 +17,17 @@ The gateway listens on port 3000. Postgres runs in Docker on port 5433.
 - `GET /health` - open, no key needed
 - `POST /v1/chat/completions` - needs `Authorization: Bearer <key>`, streaming supported
 
+## Model names
+
+Clients may ask for a logical name instead of a provider's model name:
+
+| Logical name | Served by |
+| --- | --- |
+| `fast` | groq `openai/gpt-oss-20b` |
+| `smart` | groq `openai/gpt-oss-120b` |
+
+Anything that is not a logical name is passed straight through to the provider, so real model names keep working. Both names are recorded: `model_requested` is what the client asked for, `model_served` is what actually answered, and cost is priced on the served model.
+
 ## Tenants and keys
 
 ```

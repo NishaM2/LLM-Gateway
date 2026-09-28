@@ -1,12 +1,14 @@
 import { z } from "zod"
+
+// Allowed roles for chat messages
 const roles = ["system", "developer", "user", "assistant", "tool"] as const
 
 const message = z.looseObject({
     role: z.enum(roles, { error: `must be one of: ${roles.join(", ")}`})
 })
 
-// Checks only what the gateway relies on. Every other field (max_tokens, temperature, tools...)
-// passes through untouched, so the gateway never rejects a request the provider would accept.
+// Validates the fields that the gateway needs
+// Other fields, such as temperature and max_tokens, are allowed through unchanged
 
 export const chatRequestSchema = z.looseObject(
     {

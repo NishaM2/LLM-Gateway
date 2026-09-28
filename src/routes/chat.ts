@@ -1,6 +1,7 @@
 import express from "express"
 import type { Config } from "../config.ts"
 import { createChatCompletion, describeCause, describeProviderFailure, parseJson, readUsage, type Usage } from "../providers/openai.ts"
+import { resolveModel } from "../models.ts"
 import { chatRequestSchema, describeProblem } from "../schemas/chatRequest.ts"
 import { elapsedMs, note } from "../services/requestLogger.ts"
 
@@ -27,13 +28,16 @@ export function chatRouter(config: Config): express.Router {
     }
 
     const wantsStream = result.data.stream === true
-    note(res, { modelRequested: result.data.model, provider: "groq" })
-    console.log(`Forwarding to Groq: ${result.data.model}${wantsStream ? " (streaming)" : ""}`)
+    const target = resolveModel(result.data.model)
+    note(res, { modelRequested: result.data.model, modelServed: target.model, provider: target.provider })
+    console.log(`Forwarding to ${target.provider}: asked for "${result.data.model}", serving "${target.model}"${wantsStream ? " (streaming)" : ""}`)
+
+    const outgoing = { ...result.data, model: target.model }
 
     const upstream = await createChatCompletion({
       baseUrl: GROQ_BASE_URL,
       apiKey: config.groqApiKey,
-      body: wantsStream ? { ...result.data, stream_options: { include_usage: true } } : result.data,
+      body: wantsStream ? { ...outgoing, stream_options: { include_usage: true } } : outgoing,
     })
 
     if (!upstream.ok) {

@@ -6,6 +6,7 @@ export const requests = pgTable("requests", {
   id: uuid("id").primaryKey().defaultRandom(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   modelRequested: text("model_requested"),
+  modelServed: text("model_served"),
   provider: text("provider"),
   tenantId: uuid("tenant_id").references(() => tenants.id),
   status: requestStatus("status").notNull(),

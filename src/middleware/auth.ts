@@ -13,12 +13,15 @@ export type Tenant = {
 
 export function requireApiKey(db: Db) {
   return async function (req: Request, res: Response, next: NextFunction): Promise<void> {
+    // Read Authorization header And extracts API key
     const key = readBearerToken(req.header("authorization"))
     if (!key) {
       refuse(res, "missing_key")
       return
     }
 
+    // It hashes API key and searches the database for a matching hash
+    // It also finds which tenant owns the key 
     const [row] = await db
       .select({
         id: tenants.id,
@@ -40,12 +43,14 @@ export function requireApiKey(db: Db) {
       return
     }
 
+    // stores
     res.locals.tenant = { id: row.id, name: row.name, monthlyBudgetMicros: row.monthlyBudgetMicros }
     note(res, { tenantId: row.id })
     next()
   }
 }
 
+// Retrieve the user/tenant information
 export function tenantOf(res: Response): Tenant | undefined {
   return res.locals.tenant as Tenant | undefined
 }

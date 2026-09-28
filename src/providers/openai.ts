@@ -1,3 +1,4 @@
+// Maximum time to wait for the provider to start responding (30 seconds)
 const START_TIMEOUT_MS = 30_000
 
 export class ProviderError extends Error {
@@ -23,7 +24,11 @@ export async function createChatCompletion(options: {
   apiKey: string
   body: unknown
 }): Promise<Response> {
+
+  // Create a controller that can cancel the outgoing HTTP request
   const controller = new AbortController()
+
+  // Schedule cancellation if the request takes longer than 30 seconds
   const timer = setTimeout(() => controller.abort(), START_TIMEOUT_MS)
 
   try {
@@ -61,6 +66,7 @@ export function describeProviderFailure(status: number, body: string): ProviderE
   return new ProviderError(status, "request_rejected", message, `Provider rejected the request (${status}): ${message}`, false)
 }
 
+// Extracts input and output token counts from a provider's response payload
 export function readUsage(payload: any): Usage | null {
   const usage = payload?.usage
   if (!usage) return null
@@ -86,6 +92,7 @@ function extractMessage(body: string): string {
   return body.slice(0, 200) || "no details given"
 }
 
+// Converts an unknown error into a readable description, including its cause when available
 export function describeCause(error: unknown): string {
   if (!(error instanceof Error)) return String(error)
 

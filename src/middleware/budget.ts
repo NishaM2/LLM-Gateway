@@ -4,15 +4,21 @@ import { note } from "../services/requestLogger.ts"
 import { formatMicros, monthlySpendMicros } from "../services/usage.ts"
 import { tenantOf } from "./auth.ts"
 
+// Middleware that checks whether a tenant has exceeded its monthly spending budget
 export function enforceBudget(db: Db) {
   return async function (_req: Request, res: Response, next: NextFunction): Promise<void> {
+
+    // Get the authenticated tenant saved by the auth
     const tenant = tenantOf(res)
     if (!tenant) {
       next()
       return
     }
 
+    // Calculate how much the tenant has spent this month in micro units
     const spentMicros = await monthlySpendMicros(db, tenant.id, new Date())
+
+    // Convert the spending and budget into readable amounts for messages
     const spent = formatMicros(spentMicros)
     const budget = formatMicros(tenant.monthlyBudgetMicros)
 
