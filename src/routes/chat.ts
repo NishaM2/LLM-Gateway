@@ -5,12 +5,12 @@ import type { Providers } from "../providers/registry.ts"
 import { describeCause, parseJson } from "../providers/shared.ts"
 import type { Usage } from "../providers/types.ts"
 import { chatRequestSchema, describeProblem } from "../schemas/chatRequest.ts"
-import { elapsedMs, note } from "../services/requestLogger.ts"
+import { elapsedMs, note, withLog } from "../services/requestLogger.ts"
 
 export function chatRouter(providers: Providers): express.Router {
   const router = express.Router()
 
-  router.post("/v1/chat/completions", async (req, res) => {
+  router.post("/v1/chat/completions", withLog(async (req, res) => {
     const result = chatRequestSchema.safeParse(req.body)
     if (!result.success) {
       const problem = describeProblem(result.error)
@@ -29,6 +29,12 @@ export function chatRouter(providers: Providers): express.Router {
 
     const wantsStream = result.data.stream === true
     const target = resolveModel(result.data.model)
+
+    const callerGone = new AbortController()
+    res.on("close", () => {
+      if (!res.writableEnded) callerGone.abort()
+    })
+
     note(res, { modelRequested: result.data.model, modelServed: target.model, provider: target.provider })
     console.log(`Forwarding to ${target.provider}: asked for "${result.data.model}", serving "${target.model}"${wantsStream ? " (streaming)" : ""}`)
 
@@ -36,6 +42,7 @@ export function chatRouter(providers: Providers): express.Router {
       model: target.model,
       body: result.data,
       stream: wantsStream,
+      signal: callerGone.signal,
     })
 
     if (!wantsStream || !reply.stream) {
@@ -58,13 +65,12 @@ export function chatRouter(providers: Providers): express.Router {
 
     let firstChunkSent = false
 
-    let callerLeft = false
-    res.on("close", () => {
-      if (!res.writableEnded) {
-        callerLeft = true
-        void reader.cancel().catch(() => {})
-      }
-    })
+    function stopReading(): void {
+      void reader.cancel().catch(() => {})
+    }
+
+    if (callerGone.signal.aborted) stopReading()
+    else callerGone.signal.addEventListener("abort", stopReading, { once: true })
 
     try {
       while (true) {
@@ -80,7 +86,7 @@ export function chatRouter(providers: Providers): express.Router {
         collected.add(value)
       }
 
-      if (callerLeft) {
+      if (callerGone.signal.aborted) {
         note(res, { status: "error", errorCode: "caller_hung_up" })
         console.log(`Caller hung up after ${collected.text.length} characters. Stopped the provider.`)
         return
@@ -90,7 +96,7 @@ export function chatRouter(providers: Providers): express.Router {
       res.end()
       console.log(`Full answer (${collected.text.length} characters): ${collected.text}`)
     } catch (error) {
-      if (callerLeft) {
+      if (callerGone.signal.aborted) {
         note(res, { status: "error", errorCode: "caller_hung_up" })
         console.log(`Caller hung up after ${collected.text.length} characters. Stopped the provider.`)
         return
@@ -103,7 +109,7 @@ export function chatRouter(providers: Providers): express.Router {
         res.end()
       }
     }
-  })
+  }))
 
   return router
 }

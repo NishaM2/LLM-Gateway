@@ -18,14 +18,18 @@ export function createGeminiProvider(options: { apiKey: string }): ProviderAdapt
           "x-goog-api-key": options.apiKey,
         },
         body: JSON.stringify(toGeminiBody(call.body)),
-      })
+      }, call.signal)
 
       if (!response.ok) {
         throw describeProviderFailure(response.status, await response.text())
       }
 
       if (call.stream && response.body) {
-        return { bodyText: null, stream: streamFrom(translateStream(call.model, response.body)) }
+        const upstream = response.body.getReader()
+        return {
+          bodyText: null,
+          stream: streamFrom(translateStream(call.model, upstream), () => upstream.cancel().catch(() => {})),
+        }
       }
 
       return { bodyText: toOpenAiCompletion(call.model, parseJson(await response.text())), stream: null }
@@ -116,10 +120,12 @@ function toOpenAiCompletion(model: string, payload: any): string {
   })
 }
 
-async function* translateStream(model: string, body: ReadableStream<Uint8Array>): AsyncGenerator<Uint8Array, void, void> {
+async function* translateStream(
+  model: string,
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): AsyncGenerator<Uint8Array, void, void> {
   const encoder = new TextEncoder()
   const decoder = new TextDecoder()
-  const reader = body.getReader()
 
   const id = `chatcmpl-${randomUUID()}`
   const created = Math.floor(Date.now() / 1000)

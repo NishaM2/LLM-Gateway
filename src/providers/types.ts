@@ -22,6 +22,7 @@ export type ProviderCall = {
   model: string
   body: Record<string, unknown>
   stream: boolean
+  signal?: AbortSignal
 }
 
 export type ProviderReply = {

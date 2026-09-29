@@ -1,9 +1,10 @@
 import type { NextFunction, Request, Response } from "express"
 import { ProviderError } from "../providers/types.ts"
-import { note } from "../services/requestLogger.ts"
+import { note, releaseLog } from "../services/requestLogger.ts"
 
 export function errorHandler(error: unknown, _req: Request, res: Response, next: NextFunction): void {
   if (res.headersSent) {
+    releaseLog(res)
     next(error)
     return
   }
@@ -36,4 +37,5 @@ export function errorHandler(error: unknown, _req: Request, res: Response, next:
 
 function sendError(res: Response, status: number, message: string, type: string): void {
   res.status(status).json({ error: { message, type, param: null, code: null } })
+  releaseLog(res)
 }

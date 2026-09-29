@@ -53,9 +53,10 @@ The key is printed once and only its SHA-256 hash is stored, so it cannot be rec
 
 Every request writes one row to `requests` after the reply has been sent: tenant, model, provider, status, token counts, cost in micro-dollars, total latency and time to first token. Prompt and reply text are never stored.
 
+If the caller disconnects, the gateway aborts its own request to the provider straight away, so no further tokens are generated for an answer nobody will read, and the row is recorded as `caller_hung_up`. The row is written only once the route handler has finished, so a late status change still lands.
+
 ## Known limitations
 
 - **The budget check has a race.** Spend for the month is summed before each request. Two requests arriving at the same moment can both read the same total and both be allowed, so a tenant can overshoot its budget slightly. Fixing this properly needs a reservation or a lock per tenant, which is not worth the complexity here.
 - **The request that crosses the limit still succeeds.** Cost is only known after the provider replies, so the block happens on the next request.
 - **Budgets reset on the first of the month in UTC**, not in the tenant's own timezone.
-- **A caller who hangs up mid-stream is logged as a success.** The log row is written when the response closes, which happens before the streaming loop notices the disconnect, so the `caller_hung_up` code never reaches the database. The console records it correctly. This affects both providers.

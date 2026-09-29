@@ -3,6 +3,9 @@ import type { Db } from "../db.ts"
 import { requests } from "../schema.ts"
 import { priceRequest } from "./pricing.ts"
 
+// How long to wait for a handler to finish before writing its log row regardless
+const WRITE_DEADLINE_MS = 10_000
+
 export type RequestLog = {
   tenantId: string | null
   modelRequested: string | null
@@ -34,16 +37,73 @@ export function requestLogging(db: Db) {
       ttftMs: null,
     }
 
+    let closed = false
+    let held = false
+    let written = false
+    let deadline: NodeJS.Timeout | null = null
+
+    function write(): void {
+      if (written || !closed || held) return
+      written = true
+      if (deadline) clearTimeout(deadline)
+      void writeRow(db, entry)
+    }
+
     // store the log entry
     res.locals.log = entry
     res.locals.logStartedAt = performance.now()
 
+    res.locals.logHold = () => {
+      held = true
+    }
+
+    res.locals.logRelease = () => {
+      held = false
+      write()
+    }
+
     res.on("close", () => {
       entry.latencyMs = elapsedMs(res)
-      void writeRow(db, entry)
+      closed = true
+
+      if (held) {
+        deadline = setTimeout(() => {
+          held = false
+          console.warn("A request handler did not finish in time, writing its log row anyway")
+          write()
+        }, WRITE_DEADLINE_MS)
+        deadline.unref()
+      }
+
+      write()
     })
 
     next()
+  }
+}
+
+export function holdLog(res: Response): void {
+  const hold = res.locals.logHold as (() => void) | undefined
+  hold?.()
+}
+
+export function releaseLog(res: Response): void {
+  const release = res.locals.logRelease as (() => void) | undefined
+  release?.()
+}
+
+// Wraps a route handler so its log row is written only after the handler has finished.
+// On failure the hold is passed to the error handler, which records the error code first.
+export function withLog(handler: (req: Request, res: Response) => Promise<void>) {
+  return async function (req: Request, res: Response, next: NextFunction): Promise<void> {
+    holdLog(res)
+    try {
+      await handler(req, res)
+    } catch (error) {
+      next(error)
+      return
+    }
+    releaseLog(res)
   }
 }
 

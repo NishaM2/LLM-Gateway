@@ -2,14 +2,18 @@ import { ProviderError } from "./types.ts"
 
 export const START_TIMEOUT_MS = 30_000
 
-export async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), START_TIMEOUT_MS)
+export async function fetchWithTimeout(url: string, init: RequestInit, callerSignal?: AbortSignal): Promise<Response> {
+  const timeout = new AbortController()
+  const timer = setTimeout(() => timeout.abort(), START_TIMEOUT_MS)
+  const signal = callerSignal ? AbortSignal.any([timeout.signal, callerSignal]) : timeout.signal
 
   try {
-    return await fetch(url, { ...init, signal: controller.signal })
+    return await fetch(url, { ...init, signal })
   } catch (error) {
-    if (controller.signal.aborted) {
+    if (callerSignal?.aborted) {
+      throw new ProviderError(499, "caller_hung_up", "The caller went away.", "The caller disconnected before the provider answered", false)
+    }
+    if (timeout.signal.aborted) {
       throw new ProviderError(504, "provider_timeout", "The provider took too long to answer.", `Provider did not start answering within ${START_TIMEOUT_MS}ms`, true)
     }
     throw new ProviderError(502, "provider_unreachable", "The provider could not be reached.", `Could not reach the provider: ${describeCause(error)}`, true)
@@ -63,7 +67,10 @@ function extractMessage(body: string): string {
   return body.slice(0, 200) || "no details given"
 }
 
-export function streamFrom(source: AsyncGenerator<Uint8Array, void, void>): ReadableStream<Uint8Array> {
+export function streamFrom(
+  source: AsyncGenerator<Uint8Array, void, void>,
+  stopSource: () => Promise<void>,
+): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
       const { done, value } = await source.next()
@@ -75,7 +82,7 @@ export function streamFrom(source: AsyncGenerator<Uint8Array, void, void>): Read
     },
 
     async cancel() {
-      await source.return(undefined)
+      await stopSource()
     },
   })
 }

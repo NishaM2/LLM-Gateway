@@ -25,7 +25,7 @@ export function createOpenAiProvider(options: {
           Authorization: `Bearer ${options.apiKey}`,
         },
         body: JSON.stringify(body),
-      })
+      }, call.signal)
 
       if (!response.ok) {
         throw describeProviderFailure(response.status, await response.text())
