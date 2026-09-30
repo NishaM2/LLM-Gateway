@@ -12,6 +12,7 @@ export type RequestLog = {
   modelServed: string | null
   provider: string | null
   status: "ok" | "error" | "fallback"
+  attempts: number | null
   errorCode: string | null
   inputTokens: number | null
   outputTokens: number | null
@@ -30,6 +31,7 @@ export function requestLogging(db: Db) {
       modelServed: null,
       provider: null,
       status: "ok",
+      attempts: null,
       errorCode: null,
       inputTokens: null,
       outputTokens: null,

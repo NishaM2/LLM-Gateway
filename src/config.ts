@@ -2,6 +2,7 @@ export type Config = {
   port: number;
   databaseUrl: string;
   groqApiKey: string;
+  groqBaseUrl: string;
   geminiApiKey: string;
 }
 
@@ -27,6 +28,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     port,
     databaseUrl: required("DATABASE_URL"),
     groqApiKey: required("GROQ_API_KEY"),
+    groqBaseUrl: env.GROQ_BASE_URL?.trim() || "https://api.groq.com/openai/v1",
     geminiApiKey: required("GEMINI_API_KEY"),
   };
 

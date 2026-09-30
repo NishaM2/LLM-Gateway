@@ -1,4 +1,5 @@
 import express from "express"
+import { BASE_DELAY_MS, describeAttemptFailure, MAX_ATTEMPTS, retry } from "../lib/retry.ts"
 import { resolveModel } from "../models.ts"
 import { readUsage } from "../providers/openai.ts"
 import type { Providers } from "../providers/registry.ts"
@@ -38,11 +39,21 @@ export function chatRouter(providers: Providers): express.Router {
     note(res, { modelRequested: result.data.model, modelServed: target.model, provider: target.provider })
     console.log(`Forwarding to ${target.provider}: asked for "${result.data.model}", serving "${target.model}"${wantsStream ? " (streaming)" : ""}`)
 
-    const reply = await providers[target.provider].send({
+    const call = {
       model: target.model,
       body: result.data,
       stream: wantsStream,
       signal: callerGone.signal,
+    }
+
+    const reply = await retry(() => providers[target.provider].send(call), {
+      attempts: MAX_ATTEMPTS,
+      baseDelayMs: BASE_DELAY_MS,
+      signal: callerGone.signal,
+      onAttempt: (attempt) => note(res, { attempts: attempt }),
+      onWait: (attempt, waitMs, error) => {
+        console.log(`Attempt ${attempt} failed, waiting ${waitMs}ms before the next one: ${describeAttemptFailure(error)}`)
+      },
     })
 
     if (!wantsStream || !reply.stream) {

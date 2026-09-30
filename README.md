@@ -12,6 +12,8 @@ npm run dev
 
 The gateway listens on port 3000. Postgres runs in Docker on port 5433.
 
+`GROQ_BASE_URL` can point the Groq adapter at any other OpenAI compatible endpoint, which is how retry and fallback behaviour is tested against a server that fails on purpose.
+
 ## Endpoints
 
 - `GET /health` - open, no key needed
@@ -41,6 +43,16 @@ Two things to know about Gemini specifically:
 - It spends output tokens on hidden reasoning. Google bills those, so `output_tokens` here is `candidatesTokenCount + thoughtsTokenCount`. A small `max_tokens` can be eaten entirely by thinking, and the reply then comes back with `finish_reason: length`.
 - At list price it is far more expensive per answer than the Groq models, because reasoning tokens are charged at the output rate. Identical prompts in testing cost 25 micro-dollars on `fast` and 906 on `balanced`.
 
+## Retries
+
+A failed call to a provider is tried up to three times. Between attempts the gateway waits a doubling amount of time plus a small random extra: roughly 250ms, then 500ms, each plus up to 250ms of jitter.
+
+Only failures that might pass on a second try are retried: timeouts, unreachable hosts, 429 rate limits and 5xx server errors. A 400 rejection or a 401 bad key is retried never, because the answer will not change. Each attempt count is stored on the log row as `attempts`, so a provider having a bad day is visible in the data.
+
+The doubling matters because a struggling provider should be given more room each time, not hammered at a fixed rate. The jitter matters because without it every client that failed at the same moment would retry at the same moment, and the recovering provider would be knocked over again.
+
+Retries happen around the whole provider call, which means they are safe for streaming too: nothing has been sent to the client until the provider has accepted the request.
+
 ## Tenants and keys
 
 ```
@@ -60,3 +72,4 @@ If the caller disconnects, the gateway aborts its own request to the provider st
 - **The budget check has a race.** Spend for the month is summed before each request. Two requests arriving at the same moment can both read the same total and both be allowed, so a tenant can overshoot its budget slightly. Fixing this properly needs a reservation or a lock per tenant, which is not worth the complexity here.
 - **The request that crosses the limit still succeeds.** Cost is only known after the provider replies, so the block happens on the next request.
 - **Budgets reset on the first of the month in UTC**, not in the tenant's own timezone.
+- **A provider that hangs can hold a request for 90 seconds.** Each attempt waits up to 30 seconds for the first byte, and there are up to three attempts. The circuit breaker in Step 23 is what stops this being paid repeatedly.

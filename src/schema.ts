@@ -10,6 +10,7 @@ export const requests = pgTable("requests", {
   provider: text("provider"),
   tenantId: uuid("tenant_id").references(() => tenants.id),
   status: requestStatus("status").notNull(),
+  attempts: integer("attempts"),
   errorCode: text("error_code"),
   inputTokens: integer("input_tokens"),
   outputTokens: integer("output_tokens"),
