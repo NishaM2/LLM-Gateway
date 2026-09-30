@@ -23,13 +23,13 @@ The gateway listens on port 3000. Postgres runs in Docker on port 5433.
 
 Clients may ask for a logical name instead of a provider's model name:
 
-| Logical name | Served by |
-| --- | --- |
-| `fast` | groq `openai/gpt-oss-20b` |
-| `smart` | groq `openai/gpt-oss-120b` |
-| `balanced` | gemini `gemini-3.6-flash` |
+| Logical name | First choice | Falls back to |
+| --- | --- | --- |
+| `fast` | groq `openai/gpt-oss-20b` | gemini `gemini-3.6-flash` |
+| `smart` | groq `openai/gpt-oss-120b` | gemini `gemini-3.6-flash` |
+| `balanced` | gemini `gemini-3.6-flash` | groq `openai/gpt-oss-120b` |
 
-Anything that is not a logical name is passed straight through to the provider, so real model names keep working. Names beginning with `gemini-` go to Gemini, everything else defaults to Groq. Both names are recorded: `model_requested` is what the client asked for, `model_served` is what actually answered, and cost is priced on the served model.
+Anything that is not a logical name is passed straight through to the provider, so real model names keep working. Names beginning with `gemini-` go to Gemini, everything else defaults to Groq. **A real model name never falls back**: asking for `openai/gpt-oss-20b` means that model specifically, and quietly answering with a different one would be dishonest. Fallback belongs to logical names, because those describe a capability rather than a product. Both names are recorded: `model_requested` is what the client asked for, `model_served` is what actually answered, and cost is priced on the served model.
 
 ## Providers
 
@@ -53,6 +53,23 @@ The doubling matters because a struggling provider should be given more room eac
 
 Retries happen around the whole provider call, which means they are safe for streaming too: nothing has been sent to the client until the provider has accepted the request.
 
+## Fallback
+
+When a logical name lists more than one provider and the first one fails after all its retries, the next one is tried. A request answered by anything other than the first choice is recorded with status `fallback`, and `provider` plus `model_served` name who actually answered.
+
+Retrying and falling back answer two different questions, so they are tracked separately on every provider error:
+
+| Failure | Retry the same provider | Try the next provider |
+| --- | --- | --- |
+| Timeout, host unreachable, 429, 5xx | yes | yes |
+| Bad API key (401 or 403) | no, the key will not fix itself | yes, the other provider has its own key |
+| Request rejected (400) | no | no, every provider will reject it |
+| Caller disconnected | no | no, nobody is waiting |
+
+The bad-key row is the interesting one and the reason one flag was not enough.
+
+**The streaming rule: fallback only happens before the first byte reaches the client.** This is not a check, it is where the code sits. A provider call only returns once the provider has accepted the request, so every fallback decision is made while the response body is still empty. Once chunks are flowing, a break mid-answer is recorded as `stream_broken` and the client gets a truncated answer, because switching providers halfway would mean sending two different answers glued together.
+
 ## Tenants and keys
 
 ```
@@ -72,4 +89,6 @@ If the caller disconnects, the gateway aborts its own request to the provider st
 - **The budget check has a race.** Spend for the month is summed before each request. Two requests arriving at the same moment can both read the same total and both be allowed, so a tenant can overshoot its budget slightly. Fixing this properly needs a reservation or a lock per tenant, which is not worth the complexity here.
 - **The request that crosses the limit still succeeds.** Cost is only known after the provider replies, so the block happens on the next request.
 - **Budgets reset on the first of the month in UTC**, not in the tenant's own timezone.
+- **A long rate-limit delay is still retried three times.** Gemini's quota 429 says how long to wait, sometimes hours. The gateway ignores that and retries anyway, wasting two calls. Reading the delay and giving up immediately when it is large would be a clear improvement.
+- **The Gemini free tier allows 20 requests per day**, so it is a thin safety net as a fallback target. Groq is the workhorse.
 - **A provider that hangs can hold a request for 90 seconds.** Each attempt waits up to 30 seconds for the first byte, and there are up to three attempts. The circuit breaker in Step 23 is what stops this being paid repeatedly.

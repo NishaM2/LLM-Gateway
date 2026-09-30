@@ -1,5 +1,5 @@
 import express from "express"
-import { BASE_DELAY_MS, describeAttemptFailure, MAX_ATTEMPTS, retry } from "../lib/retry.ts"
+import { describeAttemptFailure } from "../lib/retry.ts"
 import { resolveModel } from "../models.ts"
 import { readUsage } from "../providers/openai.ts"
 import type { Providers } from "../providers/registry.ts"
@@ -7,6 +7,7 @@ import { describeCause, parseJson } from "../providers/shared.ts"
 import type { Usage } from "../providers/types.ts"
 import { chatRequestSchema, describeProblem } from "../schemas/chatRequest.ts"
 import { elapsedMs, note, withLog } from "../services/requestLogger.ts"
+import { routeRequest } from "../services/router.ts"
 
 export function chatRouter(providers: Providers): express.Router {
   const router = express.Router()
@@ -29,32 +30,36 @@ export function chatRouter(providers: Providers): express.Router {
     }
 
     const wantsStream = result.data.stream === true
-    const target = resolveModel(result.data.model)
+    const route = resolveModel(result.data.model)
 
     const callerGone = new AbortController()
     res.on("close", () => {
       if (!res.writableEnded) callerGone.abort()
     })
 
-    note(res, { modelRequested: result.data.model, modelServed: target.model, provider: target.provider })
-    console.log(`Forwarding to ${target.provider}: asked for "${result.data.model}", serving "${target.model}"${wantsStream ? " (streaming)" : ""}`)
+    note(res, { modelRequested: result.data.model })
+    const plan = route.map((target) => `${target.provider}/${target.model}`).join(" then ")
+    console.log(`Routing "${result.data.model}" to ${plan}${wantsStream ? " (streaming)" : ""}`)
 
-    const call = {
-      model: target.model,
-      body: result.data,
-      stream: wantsStream,
-      signal: callerGone.signal,
-    }
-
-    const reply = await retry(() => providers[target.provider].send(call), {
-      attempts: MAX_ATTEMPTS,
-      baseDelayMs: BASE_DELAY_MS,
-      signal: callerGone.signal,
-      onAttempt: (attempt) => note(res, { attempts: attempt }),
-      onWait: (attempt, waitMs, error) => {
-        console.log(`Attempt ${attempt} failed, waiting ${waitMs}ms before the next one: ${describeAttemptFailure(error)}`)
+    const outcome = await routeRequest(
+      providers,
+      route,
+      { body: result.data, stream: wantsStream, signal: callerGone.signal },
+      {
+        onAttempt: (target, attemptsSoFar) => {
+          note(res, { provider: target.provider, modelServed: target.model, attempts: attemptsSoFar })
+        },
+        onWait: (target, waitMs, error) => {
+          console.log(`${target.provider} failed, waiting ${waitMs}ms before trying it again: ${describeAttemptFailure(error)}`)
+        },
+        onFallback: (from, to, error) => {
+          console.log(`${from.provider} is out, falling back to ${to.provider}: ${describeAttemptFailure(error)}`)
+        },
       },
-    })
+    )
+
+    const reply = outcome.reply
+    if (outcome.usedFallback) note(res, { status: "fallback" })
 
     if (!wantsStream || !reply.stream) {
       const body = reply.bodyText ?? ""

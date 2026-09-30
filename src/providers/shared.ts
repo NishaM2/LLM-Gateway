@@ -11,12 +11,33 @@ export async function fetchWithTimeout(url: string, init: RequestInit, callerSig
     return await fetch(url, { ...init, signal })
   } catch (error) {
     if (callerSignal?.aborted) {
-      throw new ProviderError(499, "caller_hung_up", "The caller went away.", "The caller disconnected before the provider answered", false)
+      throw new ProviderError({
+        status: 499,
+        code: "caller_hung_up",
+        message: "The caller went away.",
+        detail: "The caller disconnected before the provider answered",
+        retryable: false,
+        fallbackable: false,
+      })
     }
     if (timeout.signal.aborted) {
-      throw new ProviderError(504, "provider_timeout", "The provider took too long to answer.", `Provider did not start answering within ${START_TIMEOUT_MS}ms`, true)
+      throw new ProviderError({
+        status: 504,
+        code: "provider_timeout",
+        message: "The provider took too long to answer.",
+        detail: `Provider did not start answering within ${START_TIMEOUT_MS}ms`,
+        retryable: true,
+        fallbackable: true,
+      })
     }
-    throw new ProviderError(502, "provider_unreachable", "The provider could not be reached.", `Could not reach the provider: ${describeCause(error)}`, true)
+    throw new ProviderError({
+      status: 502,
+      code: "provider_unreachable",
+      message: "The provider could not be reached.",
+      detail: `Could not reach the provider: ${describeCause(error)}`,
+      retryable: true,
+      fallbackable: true,
+    })
   } finally {
     clearTimeout(timer)
   }
@@ -26,15 +47,43 @@ export function describeProviderFailure(status: number, body: string): ProviderE
   const message = extractMessage(body)
 
   if (status === 401 || status === 403) {
-    return new ProviderError(500, "gateway_misconfigured", "The gateway is not set up correctly.", `Provider rejected the gateway API key (${status}): ${message}`, false)
+    return new ProviderError({
+      status: 500,
+      code: "gateway_misconfigured",
+      message: "The gateway is not set up correctly.",
+      detail: `Provider rejected the gateway API key (${status}): ${message}`,
+      retryable: false,
+      fallbackable: true,
+    })
   }
   if (status === 429) {
-    return new ProviderError(429, "provider_rate_limited", "The provider is rate limiting this gateway. Please try again shortly.", `Provider rate limit (429): ${message}`, true)
+    return new ProviderError({
+      status: 429,
+      code: "provider_rate_limited",
+      message: "The provider is rate limiting this gateway. Please try again shortly.",
+      detail: `Provider rate limit (429): ${message}`,
+      retryable: true,
+      fallbackable: true,
+    })
   }
   if (status >= 500) {
-    return new ProviderError(502, "provider_error", `The provider failed: ${message}`, `Provider server error (${status}): ${message}`, true)
+    return new ProviderError({
+      status: 502,
+      code: "provider_error",
+      message: `The provider failed: ${message}`,
+      detail: `Provider server error (${status}): ${message}`,
+      retryable: true,
+      fallbackable: true,
+    })
   }
-  return new ProviderError(status, "request_rejected", message, `Provider rejected the request (${status}): ${message}`, false)
+  return new ProviderError({
+    status,
+    code: "request_rejected",
+    message,
+    detail: `Provider rejected the request (${status}): ${message}`,
+    retryable: false,
+    fallbackable: false,
+  })
 }
 
 export function parseJson(text: string): any {
@@ -61,12 +110,6 @@ export function toNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null
 }
 
-function extractMessage(body: string): string {
-  const parsed = parseJson(body)
-  if (typeof parsed?.error?.message === "string") return parsed.error.message
-  return body.slice(0, 200) || "no details given"
-}
-
 export function streamFrom(
   source: AsyncGenerator<Uint8Array, void, void>,
   stopSource: () => Promise<void>,
@@ -85,4 +128,10 @@ export function streamFrom(
       await stopSource()
     },
   })
+}
+
+function extractMessage(body: string): string {
+  const parsed = parseJson(body)
+  if (typeof parsed?.error?.message === "string") return parsed.error.message
+  return body.slice(0, 200) || "no details given"
 }

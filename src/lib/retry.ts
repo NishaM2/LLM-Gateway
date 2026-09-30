@@ -49,7 +49,16 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     function onAbort(): void {
       clearTimeout(timer)
-      reject(new ProviderError(499, "caller_hung_up", "The caller went away.", "The caller disconnected while the gateway was waiting to retry", false))
+      reject(
+        new ProviderError({
+          status: 499,
+          code: "caller_hung_up",
+          message: "The caller went away.",
+          detail: "The caller disconnected while the gateway was waiting to retry",
+          retryable: false,
+          fallbackable: false,
+        }),
+      )
     }
 
     const timer = setTimeout(() => {
