@@ -2,6 +2,7 @@ import { existsSync } from "node:fs"
 import { createApp } from "./app.ts"
 import { loadConfig, type Config } from "./config.ts"
 import { checkDatabase, createDb, createPool } from "./db.ts"
+import { connectCache, createCache } from "./redis.ts"
 
 if (existsSync(".env")) {
   process.loadEnvFile(".env")
@@ -23,6 +24,15 @@ try {
   console.error(error instanceof Error ? error.message : error)
   console.error("Is the database running? Start it with: docker compose up -d --wait")
   process.exit(1)
+}
+
+const cache = createCache(config.redisUrl)
+try {
+  await connectCache(cache)
+  console.log("Connected to Redis")
+} catch (error) {
+  console.warn(error instanceof Error ? error.message : error)
+  console.warn("Running without a cache. Start Redis with: docker compose up -d --wait")
 }
 
 const db = createDb(pool)

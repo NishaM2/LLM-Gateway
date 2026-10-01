@@ -10,7 +10,11 @@ npm run db:migrate
 npm run dev
 ```
 
-The gateway listens on port 3000. Postgres runs in Docker on port 5433.
+The gateway listens on port 3000. Docker runs Postgres on port 5433 and Redis on port 6379.
+
+Postgres is required and the gateway refuses to start without it, because it holds the tenants, the keys and the request log. Redis is only a cache, so it is optional: if it is missing the gateway says so once at startup, keeps serving requests, and reconnects by itself when Redis comes back. A gateway that will not start because its cache is down would be worse than one with no cache at all.
+
+Check Redis separately with `npm run redis:check`, which writes a key with a ten second life, reads it, waits, and reads it again.
 
 `GROQ_BASE_URL` can point the Groq adapter at any other OpenAI compatible endpoint, which is how retry and fallback behaviour is tested against a server that fails on purpose.
 
