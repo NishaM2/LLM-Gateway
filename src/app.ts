@@ -6,6 +6,7 @@ import { enforceBudget } from "./middleware/budget.ts"
 import { errorHandler } from "./middleware/errorHandler.ts"
 import { createProviders } from "./providers/registry.ts"
 import { chatRouter } from "./routes/chat.ts"
+import { createRouter } from "./services/router.ts"
 import { requestLogging } from "./services/requestLogger.ts"
 
 export function createApp(config: Config, db: Db) {
@@ -23,7 +24,7 @@ export function createApp(config: Config, db: Db) {
 
   app.use(enforceBudget(db))
 
-  app.use(chatRouter(createProviders(config)))
+  app.use(chatRouter(createRouter(createProviders(config))))
 
   app.use(errorHandler)
 

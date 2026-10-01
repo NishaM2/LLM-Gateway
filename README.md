@@ -70,6 +70,24 @@ The bad-key row is the interesting one and the reason one flag was not enough.
 
 **The streaming rule: fallback only happens before the first byte reaches the client.** This is not a check, it is where the code sits. A provider call only returns once the provider has accepted the request, so every fallback decision is made while the response body is still empty. Once chunks are flowing, a break mid-answer is recorded as `stream_broken` and the client gets a truncated answer, because switching providers halfway would mean sending two different answers glued together.
 
+## Circuit breaker
+
+Retries and fallback both still *call* a provider that is already known to be down, which wastes seconds on every request. Each provider therefore has a breaker in memory with three states:
+
+| State | Meaning | What happens to a request |
+| --- | --- | --- |
+| `closed` | normal | the provider is called |
+| `open` | the provider has been failing | the provider is skipped entirely, straight to the fallback |
+| `half-open` | the cooldown has passed | exactly one request is allowed through as a test |
+
+Five failures within sixty seconds opens the breaker for thirty seconds. After that it goes half-open and lets one request through: if that succeeds the breaker closes and the failure count resets, if it fails the thirty seconds start again. While a test request is in flight everything else is still skipped, so a struggling provider gets one caller at a time rather than a crowd.
+
+A failure here means one failed *request*, not one failed attempt. A request that exhausted all three retries counts once, because retries are an internal detail of a single request. Any success resets the count.
+
+The window has to be sized against that. A request that burns three retries and then falls back takes a few seconds, so five of them span fifteen seconds or more. The first version of this used a ten second window and the breaker could never open, because the oldest failures aged out before the fifth one arrived.
+
+Not every error counts against a provider. A 400 rejection means the provider answered correctly and is healthy, so it closes the breaker. A caller disconnect teaches nothing about the provider, so it is discarded without being counted either way. Letting those count would open the breaker on a perfectly healthy provider, and the disconnect case matters most precisely when a provider is slow, which is when clients give up.
+
 ## Tenants and keys
 
 ```
@@ -89,6 +107,7 @@ If the caller disconnects, the gateway aborts its own request to the provider st
 - **The budget check has a race.** Spend for the month is summed before each request. Two requests arriving at the same moment can both read the same total and both be allowed, so a tenant can overshoot its budget slightly. Fixing this properly needs a reservation or a lock per tenant, which is not worth the complexity here.
 - **The request that crosses the limit still succeeds.** Cost is only known after the provider replies, so the block happens on the next request.
 - **Budgets reset on the first of the month in UTC**, not in the tenant's own timezone.
+- **Breaker state lives in memory.** It is lost on restart, and if the gateway runs as several processes each one learns which providers are down separately. Sharing it would mean putting the counters in Redis.
 - **A long rate-limit delay is still retried three times.** Gemini's quota 429 says how long to wait, sometimes hours. The gateway ignores that and retries anyway, wasting two calls. Reading the delay and giving up immediately when it is large would be a clear improvement.
 - **The Gemini free tier allows 20 requests per day**, so it is a thin safety net as a fallback target. Groq is the workhorse.
 - **A provider that hangs can hold a request for 90 seconds.** Each attempt waits up to 30 seconds for the first byte, and there are up to three attempts. The circuit breaker in Step 23 is what stops this being paid repeatedly.

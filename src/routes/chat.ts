@@ -2,14 +2,13 @@ import express from "express"
 import { describeAttemptFailure } from "../lib/retry.ts"
 import { resolveModel } from "../models.ts"
 import { readUsage } from "../providers/openai.ts"
-import type { Providers } from "../providers/registry.ts"
 import { describeCause, parseJson } from "../providers/shared.ts"
 import type { Usage } from "../providers/types.ts"
 import { chatRequestSchema, describeProblem } from "../schemas/chatRequest.ts"
 import { elapsedMs, note, withLog } from "../services/requestLogger.ts"
-import { routeRequest } from "../services/router.ts"
+import type { Router } from "../services/router.ts"
 
-export function chatRouter(providers: Providers): express.Router {
+export function chatRouter(modelRouter: Router): express.Router {
   const router = express.Router()
 
   router.post("/v1/chat/completions", withLog(async (req, res) => {
@@ -37,12 +36,11 @@ export function chatRouter(providers: Providers): express.Router {
       if (!res.writableEnded) callerGone.abort()
     })
 
-    note(res, { modelRequested: result.data.model })
+    note(res, { modelRequested: result.data.model, attempts: 0 })
     const plan = route.map((target) => `${target.provider}/${target.model}`).join(" then ")
     console.log(`Routing "${result.data.model}" to ${plan}${wantsStream ? " (streaming)" : ""}`)
 
-    const outcome = await routeRequest(
-      providers,
+    const outcome = await modelRouter.send(
       route,
       { body: result.data, stream: wantsStream, signal: callerGone.signal },
       {
@@ -51,6 +49,12 @@ export function chatRouter(providers: Providers): express.Router {
         },
         onWait: (target, waitMs, error) => {
           console.log(`${target.provider} failed, waiting ${waitMs}ms before trying it again: ${describeAttemptFailure(error)}`)
+        },
+        onSkip: (target, state) => {
+          console.log(`Skipped ${target.provider} without calling it, its circuit is ${state}`)
+        },
+        onBreakerOpened: (target) => {
+          console.log(`Circuit opened for ${target.provider}, it will be skipped for the next 30 seconds`)
         },
         onFallback: (from, to, error) => {
           console.log(`${from.provider} is out, falling back to ${to.provider}: ${describeAttemptFailure(error)}`)
