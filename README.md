@@ -14,7 +14,7 @@ The gateway listens on port 3000. Docker runs Postgres on port 5433 and Redis on
 
 Postgres is required and the gateway refuses to start without it, because it holds the tenants, the keys and the request log. Redis is only a cache, so it is optional: if it is missing the gateway says so once at startup, keeps serving requests, and reconnects by itself when Redis comes back. A gateway that will not start because its cache is down would be worse than one with no cache at all.
 
-Check Redis separately with `npm run redis:check`, which writes a key with a ten second life, reads it, waits, and reads it again.
+Run the checks with `npm test`. Check Redis separately with `npm run redis:check`, which writes a key with a ten second life, reads it, waits, and reads it again.
 
 `GROQ_BASE_URL` can point the Groq adapter at any other OpenAI compatible endpoint, which is how retry and fallback behaviour is tested against a server that fails on purpose.
 
@@ -91,6 +91,20 @@ A failure here means one failed *request*, not one failed attempt. A request tha
 The window has to be sized against that. A request that burns three retries and then falls back takes a few seconds, so five of them span fifteen seconds or more. The first version of this used a ten second window and the breaker could never open, because the oldest failures aged out before the fifth one arrived.
 
 Not every error counts against a provider. A 400 rejection means the provider answered correctly and is healthy, so it closes the breaker. A caller disconnect teaches nothing about the provider, so it is discarded without being counted either way. Letting those count would open the breaker on a perfectly healthy provider, and the disconnect case matters most precisely when a provider is slow, which is when clients give up.
+
+## Cache keys
+
+Two requests share a cached answer only when they would genuinely deserve the same answer. `src/services/cacheKey.ts` turns a request into a SHA-256 hash by rewriting it into one canonical form first:
+
+- **Object keys are sorted** at every level, so `{model, messages}` and `{messages, model}` hash the same. JSON preserves the order you wrote, so without this the same request sent by two different clients would miss the cache every time.
+- **Array order is preserved.** Swapping two messages changes the conversation, so it must change the hash.
+- **Whitespace around message content is trimmed**, so a trailing newline does not cost a provider call. This is deliberately limited to message content: trimming every string in the request would turn a `stop` sequence of `" "` into `""` and change what the model does.
+- **Everything else in the request is included**, not just the fields the cache was designed around. `max_tokens`, `seed`, `top_p`, `response_format`, `tools` and anything a provider adds later all change the hash. Listing the fields to include would mean that the first unlisted field to affect an answer starts serving wrong cached responses, silently.
+- **`stream`, `stream_options` and `user` are ignored.** None of them change the answer, and ignoring `stream` is what lets a streaming request be served from an answer that was cached without streaming.
+
+A missing field is not the same as a present one: no `temperature` hashes differently from `temperature: 0.2`, because an absent value means whatever the provider defaults to.
+
+Run `npm test` to check all of this.
 
 ## Tenants and keys
 

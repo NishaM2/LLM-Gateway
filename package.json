@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "drizzle-kit migrate",
     "tenant:create": "tsx src/scripts/createTenant.ts",
-    "redis:check": "tsx src/scripts/checkRedis.ts"
+    "redis:check": "tsx src/scripts/checkRedis.ts",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",
