@@ -13,6 +13,7 @@ export type RequestLog = {
   provider: string | null
   status: "ok" | "error" | "fallback"
   attempts: number | null
+  cacheStatus: "hit" | "miss" | "skip" | null
   errorCode: string | null
   inputTokens: number | null
   outputTokens: number | null
@@ -32,6 +33,7 @@ export function requestLogging(db: Db) {
       provider: null,
       status: "ok",
       attempts: null,
+      cacheStatus: null,
       errorCode: null,
       inputTokens: null,
       outputTokens: null,
@@ -125,13 +127,17 @@ export function elapsedMs(res: Response): number {
 // Calculates the request's cost and saves the completed log entry in postgreSQL
 async function writeRow(db: Db, entry: RequestLog): Promise<void> {
   try {
-    const costMicros = await priceRequest(db, {
-      provider: entry.provider,
-      model: entry.modelServed,
-      inputTokens: entry.inputTokens,
-      outputTokens: entry.outputTokens,
-      at: new Date(),
-    })
+    // An answer served from the cache cost nothing, whatever its token counts say.
+    const costMicros =
+      entry.cacheStatus === "hit"
+        ? 0
+        : await priceRequest(db, {
+            provider: entry.provider,
+            model: entry.modelServed,
+            inputTokens: entry.inputTokens,
+            outputTokens: entry.outputTokens,
+            at: new Date(),
+          })
 
     await db.insert(requests).values({ ...entry, costMicros })
   } catch (error) {

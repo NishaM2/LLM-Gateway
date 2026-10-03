@@ -92,7 +92,22 @@ The window has to be sized against that. A request that burns three retries and 
 
 Not every error counts against a provider. A 400 rejection means the provider answered correctly and is healthy, so it closes the breaker. A caller disconnect teaches nothing about the provider, so it is discarded without being counted either way. Letting those count would open the breaker on a perfectly healthy provider, and the disconnect case matters most precisely when a provider is slow, which is when clients give up.
 
-## Cache keys
+## Cache
+
+Before calling a provider the gateway looks for an identical request it has already answered. A hit is returned straight from Redis: no provider call, no tokens bought, no money spent. In testing a miss took 1043ms and the same request a moment later took 10ms.
+
+Answers are stored for ten minutes under a key shaped `cache:v1:<tenant id>:<request hash>`. Two parts of that are deliberate:
+
+- **The tenant id** keeps caches separate. Without it one tenant could be handed an answer another tenant paid for, and could tell from the response time that somebody else had asked the same question.
+- **The version prefix** is the escape hatch. If the canonical form below ever changes, bumping `v1` abandons every old entry at once rather than serving answers that were computed under different rules.
+
+A hit logs `cost_micros` of zero, because nothing was bought, but it keeps the token counts from the original answer. That way the request log can still be asked how much money the cache has saved.
+
+Redis has no persistence and a 256MB limit with least-recently-used eviction, so restarting it simply empties the cache and the next request is a miss. If Redis is unreachable every lookup quietly reports a miss and the gateway behaves as though there were no cache at all.
+
+Streaming requests are recorded as `skip` for now and always call a provider.
+
+### What makes two requests the same
 
 Two requests share a cached answer only when they would genuinely deserve the same answer. `src/services/cacheKey.ts` turns a request into a SHA-256 hash by rewriting it into one canonical form first:
 

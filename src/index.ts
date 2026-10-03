@@ -36,7 +36,7 @@ try {
 }
 
 const db = createDb(pool)
-const app = createApp(config, db)
+const app = createApp(config, db, cache)
 
 
 app.listen(config.port, (error) => {

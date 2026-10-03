@@ -2,6 +2,8 @@ import { integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "dr
 
 export const requestStatus = pgEnum("request_status", ["ok", "error", "fallback"])
 
+export const cacheStatus = pgEnum("cache_status", ["hit", "miss", "skip"])
+
 export const requests = pgTable("requests", {
   id: uuid("id").primaryKey().defaultRandom(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -11,6 +13,7 @@ export const requests = pgTable("requests", {
   tenantId: uuid("tenant_id").references(() => tenants.id),
   status: requestStatus("status").notNull(),
   attempts: integer("attempts"),
+  cacheStatus: cacheStatus("cache_status"),
   errorCode: text("error_code"),
   inputTokens: integer("input_tokens"),
   outputTokens: integer("output_tokens"),

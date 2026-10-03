@@ -1,6 +1,7 @@
 import express from "express"
 import type { Config } from "./config.ts"
 import type { Db } from "./db.ts"
+import type { Cache } from "./redis.ts"
 import { requireApiKey } from "./middleware/auth.ts"
 import { enforceBudget } from "./middleware/budget.ts"
 import { errorHandler } from "./middleware/errorHandler.ts"
@@ -9,7 +10,7 @@ import { chatRouter } from "./routes/chat.ts"
 import { createRouter } from "./services/router.ts"
 import { requestLogging } from "./services/requestLogger.ts"
 
-export function createApp(config: Config, db: Db) {
+export function createApp(config: Config, db: Db, cache: Cache) {
   const app = express()
 
   app.use(express.json({ limit: "2mb" }))
@@ -24,7 +25,7 @@ export function createApp(config: Config, db: Db) {
 
   app.use(enforceBudget(db))
 
-  app.use(chatRouter(createRouter(createProviders(config))))
+  app.use(chatRouter(createRouter(createProviders(config)), cache))
 
   app.use(errorHandler)
 

@@ -3,12 +3,15 @@ import { describeAttemptFailure } from "../lib/retry.ts"
 import { resolveModel } from "../models.ts"
 import { readUsage } from "../providers/openai.ts"
 import { describeCause, parseJson } from "../providers/shared.ts"
+import type { Cache } from "../redis.ts"
 import type { Usage } from "../providers/types.ts"
 import { chatRequestSchema, describeProblem } from "../schemas/chatRequest.ts"
+import { tenantOf } from "../middleware/auth.ts"
+import { cacheKeyFor, readAnswer, writeAnswer } from "../services/exactCache.ts"
 import { elapsedMs, note, withLog } from "../services/requestLogger.ts"
 import type { Router } from "../services/router.ts"
 
-export function chatRouter(modelRouter: Router): express.Router {
+export function chatRouter(modelRouter: Router, cache: Cache): express.Router {
   const router = express.Router()
 
   router.post("/v1/chat/completions", withLog(async (req, res) => {
@@ -37,6 +40,29 @@ export function chatRouter(modelRouter: Router): express.Router {
     })
 
     note(res, { modelRequested: result.data.model, attempts: 0 })
+
+    const tenant = tenantOf(res)
+    const key = tenant && !wantsStream ? cacheKeyFor(tenant.id, result.data) : null
+
+    if (key === null) {
+      note(res, { cacheStatus: "skip" })
+    } else {
+      const cached = await readAnswer(cache, key)
+      if (cached) {
+        note(res, {
+          cacheStatus: "hit",
+          provider: cached.provider,
+          modelServed: cached.model,
+          inputTokens: cached.inputTokens,
+          outputTokens: cached.outputTokens,
+        })
+        console.log(`Cache hit for "${result.data.model}", answered without calling a provider`)
+        res.status(200).type("application/json").send(cached.bodyText)
+        return
+      }
+      note(res, { cacheStatus: "miss" })
+    }
+
     const plan = route.map((target) => `${target.provider}/${target.model}`).join(" then ")
     console.log(`Routing "${result.data.model}" to ${plan}${wantsStream ? " (streaming)" : ""}`)
 
@@ -70,6 +96,16 @@ export function chatRouter(modelRouter: Router): express.Router {
       const usage = readUsage(parseJson(body))
       if (usage) note(res, usage)
       res.status(200).type("application/json").send(body)
+
+      if (key !== null) {
+        await writeAnswer(cache, key, {
+          bodyText: body,
+          provider: outcome.target.provider,
+          model: outcome.target.model,
+          inputTokens: usage?.inputTokens ?? null,
+          outputTokens: usage?.outputTokens ?? null,
+        })
+      }
       return
     }
 

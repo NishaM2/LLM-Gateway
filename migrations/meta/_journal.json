@@ -57,6 +57,13 @@
       "when": 1791791080473,
       "tag": "0007_request_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791810085435,
+      "tag": "0008_cache_status",
+      "breakpoints": true
     }
   ]
 }
