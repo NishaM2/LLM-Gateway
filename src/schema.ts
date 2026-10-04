@@ -1,4 +1,6 @@
-import { integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core"
+import { integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, vector } from "drizzle-orm/pg-core"
+
+export const EMBEDDING_DIMENSIONS = 384
 
 export const requestStatus = pgEnum("request_status", ["ok", "error", "fallback"])
 
@@ -51,4 +53,16 @@ export const apiKeys = pgTable("api_keys", {
   keyHash: text("key_hash").notNull().unique(),
   label: text("label").notNull(),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
+})
+
+export const cacheEntries = pgTable("cache_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  namespace: text("namespace").notNull(),
+  prompt: text("prompt").notNull(),
+  embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+  response: jsonb("response").notNull(),
+  model: text("model").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  hitCount: integer("hit_count").notNull().default(0),
 })

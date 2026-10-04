@@ -64,6 +64,20 @@
       "when": 1791810085435,
       "tag": "0008_cache_status",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791812740545,
+      "tag": "0009_enable_pgvector",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791812756973,
+      "tag": "0010_cache_entries",
+      "breakpoints": true
     }
   ]
 }
