@@ -8,7 +8,12 @@ export const CACHE_TTL_SECONDS = 600
 const KEY_VERSION = "v1"
 
 export type CachedAnswer = {
-  bodyText: string
+  // The answer on its own, used to replay a cached answer as a stream.
+  text: string
+  finishReason: string
+  // The provider's exact non streaming body, kept when we have it so a non streaming
+  // hit is byte for byte what the provider sent. A streaming request has no such body.
+  bodyText: string | null
   provider: string
   model: string
   inputTokens: number | null
@@ -27,7 +32,7 @@ export async function readAnswer(cache: Cache, key: string): Promise<CachedAnswe
     if (stored === null) return null
 
     const parsed = JSON.parse(stored) as CachedAnswer
-    return typeof parsed?.bodyText === "string" ? parsed : null
+    return typeof parsed?.text === "string" ? parsed : null
   } catch {
     return null
   }

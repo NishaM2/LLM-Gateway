@@ -105,7 +105,27 @@ A hit logs `cost_micros` of zero, because nothing was bought, but it keeps the t
 
 Redis has no persistence and a 256MB limit with least-recently-used eviction, so restarting it simply empties the cache and the next request is a miss. If Redis is unreachable every lookup quietly reports a miss and the gateway behaves as though there were no cache at all.
 
-Streaming requests are recorded as `skip` for now and always call a provider.
+### Streaming
+
+A streaming request stores its answer too, and a streaming hit is replayed rather than dumped. The stored text goes back in eight character pieces about twelve milliseconds apart, with the same `chat.completion.chunk` shape a provider would send, so a UI that types the answer out keeps typing. An instant wall of text would look like a bug.
+
+Long answers are paced faster so the whole replay never exceeds about a second and a half. A cached essay delivered at a fixed drip rate would end up slower than fetching it again, which would defeat the point.
+
+A non streaming hit returns the provider's original body byte for byte, because that body is stored alongside the text. A streaming answer has no such body, so if one of those is later asked for without streaming the gateway rebuilds a normal completion from the stored text.
+
+### When the cache is not used
+
+Three kinds of request skip the cache entirely, neither read nor written, and are logged as `skip`:
+
+| Rule | Why |
+| --- | --- |
+| `temperature` above 0.2 | the caller explicitly asked for variety, and handing back a stored answer is the opposite of that |
+| `tools` or `functions` is a non-empty list | the answer depends on tool results the gateway never sees |
+| `Cache-Control: no-cache` or `no-store` | the caller asked for a fresh answer |
+
+A request with **no** `temperature` at all is treated as cacheable. Strictly it is not obvious: leaving it out means the provider picks, and OpenAI compatible defaults are usually 1.0, which is high. Almost every real client omits it and still expects caching to work, so that is the behaviour chosen here. Raising `MAX_CACHEABLE_TEMPERATURE` in `src/services/cachePolicy.ts` to nothing, or treating absent as uncacheable, are both one line changes if that trade is ever wrong.
+
+`tool_choice` on its own does not block caching, and nor does an empty `tools` list. Neither can actually produce a tool call.
 
 ### What makes two requests the same
 

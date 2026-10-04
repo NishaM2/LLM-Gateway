@@ -1,4 +1,5 @@
 import express from "express"
+import type { Response } from "express"
 import { describeAttemptFailure } from "../lib/retry.ts"
 import { resolveModel } from "../models.ts"
 import { readUsage } from "../providers/openai.ts"
@@ -7,6 +8,8 @@ import type { Cache } from "../redis.ts"
 import type { Usage } from "../providers/types.ts"
 import { chatRequestSchema, describeProblem } from "../schemas/chatRequest.ts"
 import { tenantOf } from "../middleware/auth.ts"
+import { cachePolicy } from "../services/cachePolicy.ts"
+import { completionFrom, replayAsStream } from "../services/cacheReplay.ts"
 import { cacheKeyFor, readAnswer, writeAnswer } from "../services/exactCache.ts"
 import { elapsedMs, note, withLog } from "../services/requestLogger.ts"
 import type { Router } from "../services/router.ts"
@@ -42,10 +45,12 @@ export function chatRouter(modelRouter: Router, cache: Cache): express.Router {
     note(res, { modelRequested: result.data.model, attempts: 0 })
 
     const tenant = tenantOf(res)
-    const key = tenant && !wantsStream ? cacheKeyFor(tenant.id, result.data) : null
+    const decision = cachePolicy({ body: result.data, cacheControl: req.header("cache-control") })
+    const key = tenant && decision.cacheable ? cacheKeyFor(tenant.id, result.data) : null
 
     if (key === null) {
       note(res, { cacheStatus: "skip" })
+      if (!decision.cacheable) console.log(`Not using the cache: ${decision.reason}`)
     } else {
       const cached = await readAnswer(cache, key)
       if (cached) {
@@ -56,8 +61,15 @@ export function chatRouter(modelRouter: Router, cache: Cache): express.Router {
           inputTokens: cached.inputTokens,
           outputTokens: cached.outputTokens,
         })
-        console.log(`Cache hit for "${result.data.model}", answered without calling a provider`)
-        res.status(200).type("application/json").send(cached.bodyText)
+        console.log(`Cache hit for "${result.data.model}"${wantsStream ? ", replaying it as a stream" : ""}`)
+
+        if (wantsStream) {
+          startEventStream(res)
+          await replayAsStream(res, cached, callerGone.signal)
+          if (callerGone.signal.aborted) note(res, { status: "error", errorCode: "caller_hung_up" })
+        } else {
+          res.status(200).type("application/json").send(cached.bodyText ?? completionFrom(cached))
+        }
         return
       }
       note(res, { cacheStatus: "miss" })
@@ -93,12 +105,16 @@ export function chatRouter(modelRouter: Router, cache: Cache): express.Router {
 
     if (!wantsStream || !reply.stream) {
       const body = reply.bodyText ?? ""
-      const usage = readUsage(parseJson(body))
+      const parsed = parseJson(body)
+      const usage = readUsage(parsed)
       if (usage) note(res, usage)
       res.status(200).type("application/json").send(body)
 
-      if (key !== null) {
+      const text = answerText(parsed)
+      if (key !== null && text !== "") {
         await writeAnswer(cache, key, {
+          text,
+          finishReason: finishReasonOf(parsed),
           bodyText: body,
           provider: outcome.target.provider,
           model: outcome.target.model,
@@ -109,12 +125,7 @@ export function chatRouter(modelRouter: Router, cache: Cache): express.Router {
       return
     }
 
-    res.status(200)
-    res.setHeader("Content-Type", "text/event-stream; charset=utf-8")
-    res.setHeader("Cache-Control", "no-cache, no-transform")
-    res.setHeader("Connection", "keep-alive")
-    res.setHeader("X-Accel-Buffering", "no")
-    res.flushHeaders()
+    startEventStream(res)
 
     const collected = createStreamCollector()
     const reader = reply.stream.getReader()
@@ -151,6 +162,18 @@ export function chatRouter(modelRouter: Router, cache: Cache): express.Router {
       if (collected.usage) note(res, collected.usage)
       res.end()
       console.log(`Full answer (${collected.text.length} characters): ${collected.text}`)
+
+      if (key !== null && collected.text !== "") {
+        await writeAnswer(cache, key, {
+          text: collected.text,
+          finishReason: collected.finishReason,
+          bodyText: null,
+          provider: outcome.target.provider,
+          model: outcome.target.model,
+          inputTokens: collected.usage?.inputTokens ?? null,
+          outputTokens: collected.usage?.outputTokens ?? null,
+        })
+      }
     } catch (error) {
       if (callerGone.signal.aborted) {
         note(res, { status: "error", errorCode: "caller_hung_up" })
@@ -170,10 +193,30 @@ export function chatRouter(modelRouter: Router, cache: Cache): express.Router {
   return router
 }
 
+function startEventStream(res: Response): void {
+  res.status(200)
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8")
+  res.setHeader("Cache-Control", "no-cache, no-transform")
+  res.setHeader("Connection", "keep-alive")
+  res.setHeader("X-Accel-Buffering", "no")
+  res.flushHeaders()
+}
+
+function answerText(payload: any): string {
+  const content = payload?.choices?.[0]?.message?.content
+  return typeof content === "string" ? content : ""
+}
+
+function finishReasonOf(payload: any): string {
+  const reason = payload?.choices?.[0]?.finish_reason
+  return typeof reason === "string" ? reason : "stop"
+}
+
 function createStreamCollector() {
   const decoder = new TextDecoder()
   let buffer = ""
   let text = ""
+  let finishReason = "stop"
   let usage: Usage | null = null
 
   return {
@@ -195,6 +238,9 @@ function createStreamCollector() {
           const piece = parsed?.choices?.[0]?.delta?.content
           if (typeof piece === "string") text += piece
 
+          const reason = parsed?.choices?.[0]?.finish_reason
+          if (typeof reason === "string") finishReason = reason
+
           const chunkUsage = readUsage(parsed)
           if (chunkUsage) usage = chunkUsage
         }
@@ -202,6 +248,9 @@ function createStreamCollector() {
     },
     get text() {
       return text
+    },
+    get finishReason() {
+      return finishReason
     },
     get usage() {
       return usage
