@@ -1,0 +1,4 @@
+{
+  "model": "mock",
+  "messages": [{ "role": "user", "content": "Why is the sky blue?" }]
+}

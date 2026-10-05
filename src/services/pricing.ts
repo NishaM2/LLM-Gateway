@@ -14,6 +14,7 @@ export async function priceRequest(
 ): Promise<number | null> {
   if (!input.provider || !input.model) return null
   if (input.inputTokens === null && input.outputTokens === null) return null
+  if (input.provider === "mock") return 0
 
   const [price] = await db
     .select()

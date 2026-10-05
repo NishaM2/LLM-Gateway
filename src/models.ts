@@ -1,4 +1,4 @@
-export type ProviderName = "groq" | "gemini"
+export type ProviderName = "groq" | "gemini" | "mock"
 
 export type ModelTarget = {
   provider: ProviderName
@@ -44,5 +44,6 @@ function providerFor(model: string): ProviderName {
   const known = realModels[model]
   if (known) return known
   if (model.startsWith("gemini-")) return "gemini"
+  if (model === "mock" || model.startsWith("mock-")) return "mock"
   return DEFAULT_PROVIDER
 }

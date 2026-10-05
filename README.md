@@ -33,7 +33,7 @@ Clients may ask for a logical name instead of a provider's model name:
 | `smart` | groq `openai/gpt-oss-120b` | gemini `gemini-3.6-flash` |
 | `balanced` | gemini `gemini-3.6-flash` | groq `openai/gpt-oss-120b` |
 
-Anything that is not a logical name is passed straight through to the provider, so real model names keep working. Names beginning with `gemini-` go to Gemini, everything else defaults to Groq. **A real model name never falls back**: asking for `openai/gpt-oss-20b` means that model specifically, and quietly answering with a different one would be dishonest. Fallback belongs to logical names, because those describe a capability rather than a product. Both names are recorded: `model_requested` is what the client asked for, `model_served` is what actually answered, and cost is priced on the served model.
+Anything that is not a logical name is passed straight through to the provider, so real model names keep working. Names beginning with `gemini-` go to Gemini, `mock` and names beginning with `mock-` go to the mock provider, and everything else defaults to Groq. **A real model name never falls back**: asking for `openai/gpt-oss-20b` means that model specifically, and quietly answering with a different one would be dishonest. Fallback belongs to logical names, because those describe a capability rather than a product. Both names are recorded: `model_requested` is what the client asked for, `model_served` is what actually answered, and cost is priced on the served model.
 
 ## Providers
 
@@ -41,6 +41,18 @@ The gateway speaks OpenAI format to its clients, and OpenAI format is also its i
 
 - **Groq** (`src/providers/openai.ts`) is OpenAI-compatible already, so its bytes are forwarded untouched. Vendor extras such as `x_groq` survive.
 - **Gemini** (`src/providers/gemini.ts`) is not, so it is translated on the way in and on the way out. System messages become `systemInstruction`, `assistant` becomes `model`, `max_tokens` becomes `generationConfig.maxOutputTokens`, and each Gemini stream event is rebuilt as a `chat.completion.chunk`.
+
+- **Mock** (`src/providers/mock.ts`) runs inside the gateway and never calls the internet. It answers `Mock answer to: <your last message>`, costs nothing, and has no daily limit, so use it for repeated testing instead of burning real quotas. The model name chooses its behaviour:
+
+| Model | What it does |
+| --- | --- |
+| `mock` | Answers straight away |
+| `mock-slow` | Waits 3 seconds, then answers |
+| `mock-429` | Fails with a rate limit, so retries kick in |
+| `mock-500` | Fails with a server error, so retries kick in |
+| `mock-dies` | Streams half the answer, then breaks. Non-streaming requests answer normally |
+
+Its failures go through the same error mapping as real providers, so retries, fallback and the circuit breaker treat them exactly the same. All mock models share one circuit breaker, so a few `mock-500` calls in a row will make plain `mock` get skipped for 30 seconds too, just as a real outage would. Token counts are estimated at one token per four characters.
 
 Two things to know about Gemini specifically:
 
