@@ -15,9 +15,11 @@
     "db:migrate": "drizzle-kit migrate",
     "tenant:create": "tsx src/scripts/createTenant.ts",
     "redis:check": "tsx src/scripts/checkRedis.ts",
+    "embeddings:check": "tsx src/scripts/checkEmbeddings.ts",
     "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.0",
     "drizzle-orm": "^0.45.3",
     "express": "^5.2.1",
     "pg": "^8.23.0",
