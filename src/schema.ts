@@ -1,10 +1,10 @@
-import { integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, vector } from "drizzle-orm/pg-core"
+import { index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uniqueIndex, uuid, vector } from "drizzle-orm/pg-core"
 
 export const EMBEDDING_DIMENSIONS = 384
 
 export const requestStatus = pgEnum("request_status", ["ok", "error", "fallback"])
 
-export const cacheStatus = pgEnum("cache_status", ["hit", "miss", "skip"])
+export const cacheStatus = pgEnum("cache_status", ["hit", "miss", "skip", "semantic_hit"])
 
 export const requests = pgTable("requests", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -16,6 +16,7 @@ export const requests = pgTable("requests", {
   status: requestStatus("status").notNull(),
   attempts: integer("attempts"),
   cacheStatus: cacheStatus("cache_status"),
+  semanticSimilarity: real("semantic_similarity"),
   errorCode: text("error_code"),
   inputTokens: integer("input_tokens"),
   outputTokens: integer("output_tokens"),
@@ -55,14 +56,21 @@ export const apiKeys = pgTable("api_keys", {
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 })
 
-export const cacheEntries = pgTable("cache_entries", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  namespace: text("namespace").notNull(),
-  prompt: text("prompt").notNull(),
-  embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
-  response: jsonb("response").notNull(),
-  model: text("model").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  hitCount: integer("hit_count").notNull().default(0),
-})
+export const cacheEntries = pgTable(
+  "cache_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    namespace: text("namespace").notNull(),
+    prompt: text("prompt").notNull(),
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+    response: jsonb("response").notNull(),
+    model: text("model").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    hitCount: integer("hit_count").notNull().default(0),
+  },
+  (table) => [
+    index("cache_entries_namespace_idx").on(table.namespace),
+    index("cache_entries_embedding_idx").using("hnsw", table.embedding.op("vector_cosine_ops")),
+  ],
+)

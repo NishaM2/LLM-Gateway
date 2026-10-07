@@ -4,17 +4,19 @@ import { describeAttemptFailure } from "../lib/retry.ts"
 import { resolveModel } from "../models.ts"
 import { readUsage } from "../providers/openai.ts"
 import { describeCause, parseJson } from "../providers/shared.ts"
+import type { Db } from "../db.ts"
 import type { Cache } from "../redis.ts"
 import type { Usage } from "../providers/types.ts"
 import { chatRequestSchema, describeProblem } from "../schemas/chatRequest.ts"
 import { tenantOf } from "../middleware/auth.ts"
 import { cachePolicy } from "../services/cachePolicy.ts"
 import { completionFrom, replayAsStream } from "../services/cacheReplay.ts"
-import { cacheKeyFor, readAnswer, writeAnswer } from "../services/exactCache.ts"
+import { cacheKeyFor, readAnswer, writeAnswer, type CachedAnswer } from "../services/exactCache.ts"
 import { elapsedMs, note, withLog } from "../services/requestLogger.ts"
 import type { Router } from "../services/router.ts"
+import { isSemanticHit, rememberAnswer, searchSemantic, type SemanticSearch } from "../services/semanticCache.ts"
 
-export function chatRouter(modelRouter: Router, cache: Cache): express.Router {
+export function chatRouter(modelRouter: Router, cache: Cache, db: Db): express.Router {
   const router = express.Router()
 
   router.post("/v1/chat/completions", withLog(async (req, res) => {
@@ -47,31 +49,54 @@ export function chatRouter(modelRouter: Router, cache: Cache): express.Router {
     const tenant = tenantOf(res)
     const decision = cachePolicy({ body: result.data, cacheControl: req.header("cache-control") })
     const key = tenant && decision.cacheable ? cacheKeyFor(tenant.id, result.data) : null
+    let search: SemanticSearch | null = null
 
-    if (key === null) {
+    async function serveCached(answer: CachedAnswer, cacheStatus: "hit" | "semantic_hit"): Promise<void> {
+      note(res, {
+        cacheStatus,
+        provider: answer.provider,
+        modelServed: answer.model,
+        inputTokens: answer.inputTokens,
+        outputTokens: answer.outputTokens,
+      })
+
+      if (wantsStream) {
+        startEventStream(res)
+        await replayAsStream(res, answer, callerGone.signal)
+        if (callerGone.signal.aborted) note(res, { status: "error", errorCode: "caller_hung_up" })
+      } else {
+        res.status(200).type("application/json").send(answer.bodyText ?? completionFrom(answer))
+      }
+    }
+
+    async function remember(answer: CachedAnswer): Promise<void> {
+      if (key === null || answer.text === "" || answer.finishReason === "length") return
+      await writeAnswer(cache, key, answer)
+      if (search) await rememberAnswer(db, search, answer)
+    }
+
+    if (key === null || !tenant) {
       note(res, { cacheStatus: "skip" })
       if (!decision.cacheable) console.log(`Not using the cache: ${decision.reason}`)
     } else {
       const cached = await readAnswer(cache, key)
       if (cached) {
-        note(res, {
-          cacheStatus: "hit",
-          provider: cached.provider,
-          modelServed: cached.model,
-          inputTokens: cached.inputTokens,
-          outputTokens: cached.outputTokens,
-        })
         console.log(`Cache hit for "${result.data.model}"${wantsStream ? ", replaying it as a stream" : ""}`)
-
-        if (wantsStream) {
-          startEventStream(res)
-          await replayAsStream(res, cached, callerGone.signal)
-          if (callerGone.signal.aborted) note(res, { status: "error", errorCode: "caller_hung_up" })
-        } else {
-          res.status(200).type("application/json").send(cached.bodyText ?? completionFrom(cached))
-        }
+        await serveCached(cached, "hit")
         return
       }
+
+      search = await searchSemantic(db, tenant.id, result.data)
+      const closest = search?.closest
+      if (closest) note(res, { semanticSimilarity: closest.similarity })
+
+      if (isSemanticHit(search)) {
+        console.log(`Semantic hit (${search.closest.similarity.toFixed(3)}): "${search.question}" matched "${search.closest.prompt}"`)
+        await serveCached(search.closest.answer, "semantic_hit")
+        return
+      }
+
+      if (closest) console.log(`Semantic miss, closest was ${closest.similarity.toFixed(3)}: "${closest.prompt}"`)
       note(res, { cacheStatus: "miss" })
     }
 
@@ -110,18 +135,15 @@ export function chatRouter(modelRouter: Router, cache: Cache): express.Router {
       if (usage) note(res, usage)
       res.status(200).type("application/json").send(body)
 
-      const text = answerText(parsed)
-      if (key !== null && text !== "") {
-        await writeAnswer(cache, key, {
-          text,
-          finishReason: finishReasonOf(parsed),
-          bodyText: body,
-          provider: outcome.target.provider,
-          model: outcome.target.model,
-          inputTokens: usage?.inputTokens ?? null,
-          outputTokens: usage?.outputTokens ?? null,
-        })
-      }
+      await remember({
+        text: answerText(parsed),
+        finishReason: finishReasonOf(parsed),
+        bodyText: body,
+        provider: outcome.target.provider,
+        model: outcome.target.model,
+        inputTokens: usage?.inputTokens ?? null,
+        outputTokens: usage?.outputTokens ?? null,
+      })
       return
     }
 
@@ -163,17 +185,15 @@ export function chatRouter(modelRouter: Router, cache: Cache): express.Router {
       res.end()
       console.log(`Full answer (${collected.text.length} characters): ${collected.text}`)
 
-      if (key !== null && collected.text !== "") {
-        await writeAnswer(cache, key, {
-          text: collected.text,
-          finishReason: collected.finishReason,
-          bodyText: null,
-          provider: outcome.target.provider,
-          model: outcome.target.model,
-          inputTokens: collected.usage?.inputTokens ?? null,
-          outputTokens: collected.usage?.outputTokens ?? null,
-        })
-      }
+      await remember({
+        text: collected.text,
+        finishReason: collected.finishReason,
+        bodyText: null,
+        provider: outcome.target.provider,
+        model: outcome.target.model,
+        inputTokens: collected.usage?.inputTokens ?? null,
+        outputTokens: collected.usage?.outputTokens ?? null,
+      })
     } catch (error) {
       if (callerGone.signal.aborted) {
         note(res, { status: "error", errorCode: "caller_hung_up" })

@@ -13,7 +13,8 @@ export type RequestLog = {
   provider: string | null
   status: "ok" | "error" | "fallback"
   attempts: number | null
-  cacheStatus: "hit" | "miss" | "skip" | null
+  cacheStatus: "hit" | "semantic_hit" | "miss" | "skip" | null
+  semanticSimilarity: number | null
   errorCode: string | null
   inputTokens: number | null
   outputTokens: number | null
@@ -34,6 +35,7 @@ export function requestLogging(db: Db) {
       status: "ok",
       attempts: null,
       cacheStatus: null,
+      semanticSimilarity: null,
       errorCode: null,
       inputTokens: null,
       outputTokens: null,
@@ -129,7 +131,7 @@ async function writeRow(db: Db, entry: RequestLog): Promise<void> {
   try {
     // An answer served from the cache cost nothing, whatever its token counts say.
     const costMicros =
-      entry.cacheStatus === "hit"
+      entry.cacheStatus === "hit" || entry.cacheStatus === "semantic_hit"
         ? 0
         : await priceRequest(db, {
             provider: entry.provider,

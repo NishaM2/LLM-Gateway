@@ -153,6 +153,20 @@ A missing field is not the same as a present one: no `temperature` hashes differ
 
 Run `npm test` to check all of this.
 
+## Semantic cache
+
+When the exact cache misses, the gateway checks whether a question that *means* the same thing has been answered before. "How can I reset my password?" can be served the stored answer to "How do I reset my password?", even though the words differ.
+
+1. The last user message is turned into 384 numbers (an embedding) by a small model running inside the gateway (`Xenova/all-MiniLM-L6-v2`). It is free, takes about 13ms, and is loaded once at startup.
+2. Postgres finds the closest stored question **within the same namespace** (`src/services/namespace.ts`): same tenant, model, system prompt, tools, temperature bucket, earlier conversation and other settings. A similar question under a different system prompt deserves a different answer, so it is never even compared.
+3. If the closest one scores at least `SIMILARITY_THRESHOLD` (0.95 for now), its answer is served and the row is logged as `semantic_hit`. Otherwise the provider is called and the new question and answer are stored for an hour.
+
+Every lookup writes the best score it found to `semantic_similarity` on the log row, hit or miss, so real traffic shows how close the near misses were.
+
+The same no-cache rules apply as for the exact cache. On top of those, only plain text questions are matched by meaning: a message with an image, or a conversation that does not end with a user message, skips this step. Answers cut off by `max_tokens` (`finish_reason: length`) are stored in neither cache.
+
+Postgres narrows to the namespace first, using an ordinary index, and only then compares vectors. The HNSW vector index is there for the day one namespace holds thousands of entries. HNSW is approximate: it trades a perfect answer for a fast one. On its own it would find the nearest vectors across *all* namespaces and filter afterwards, which can leave nothing behind, so connections set `hnsw.iterative_scan = strict_order` to make it keep searching until it finds a match in the right namespace.
+
 ## Tenants and keys
 
 ```

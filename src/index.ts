@@ -3,6 +3,7 @@ import { createApp } from "./app.ts"
 import { loadConfig, type Config } from "./config.ts"
 import { checkDatabase, createDb, createPool } from "./db.ts"
 import { connectCache, createCache } from "./redis.ts"
+import { embed, EMBEDDING_MODEL } from "./services/embeddings.ts"
 
 if (existsSync(".env")) {
   process.loadEnvFile(".env")
@@ -34,6 +35,10 @@ try {
   console.warn(error instanceof Error ? error.message : error)
   console.warn("Running without a cache. Start Redis with: docker compose up -d --wait")
 }
+
+embed("warm up")
+  .then(() => console.log(`Loaded the embedding model ${EMBEDDING_MODEL}`))
+  .catch((error) => console.warn(`Could not load the embedding model, the semantic cache will miss: ${error instanceof Error ? error.message : error}`))
 
 const db = createDb(pool)
 const app = createApp(config, db, cache)

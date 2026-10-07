@@ -25,7 +25,7 @@ export function createApp(config: Config, db: Db, cache: Cache) {
 
   app.use(enforceBudget(db))
 
-  app.use(chatRouter(createRouter(createProviders(config)), cache))
+  app.use(chatRouter(createRouter(createProviders(config)), cache, db))
 
   app.use(errorHandler)
 
