@@ -16,6 +16,7 @@
     "tenant:create": "tsx src/scripts/createTenant.ts",
     "redis:check": "tsx src/scripts/checkRedis.ts",
     "embeddings:check": "tsx src/scripts/checkEmbeddings.ts",
+    "eval:sweep": "tsx evals/sweep.ts",
     "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {

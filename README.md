@@ -159,7 +159,7 @@ When the exact cache misses, the gateway checks whether a question that *means* 
 
 1. The last user message is turned into 384 numbers (an embedding) by a small model running inside the gateway (`Xenova/all-MiniLM-L6-v2`). It is free, takes about 13ms, and is loaded once at startup.
 2. Postgres finds the closest stored question **within the same namespace** (`src/services/namespace.ts`): same tenant, model, system prompt, tools, temperature bucket, earlier conversation and other settings. A similar question under a different system prompt deserves a different answer, so it is never even compared.
-3. If the closest one scores at least `SIMILARITY_THRESHOLD` (0.95 for now), its answer is served and the row is logged as `semantic_hit`. Otherwise the provider is called and the new question and answer are stored for an hour.
+3. If the closest one scores at least `SIMILARITY_THRESHOLD` (0.90, chosen by measurement, see [evals/results.md](evals/results.md)), its answer is served and the row is logged as `semantic_hit`. Otherwise the provider is called and the new question and answer are stored for an hour.
 
 Every lookup writes the best score it found to `semantic_similarity` on the log row, hit or miss, so real traffic shows how close the near misses were.
 

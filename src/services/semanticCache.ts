@@ -5,7 +5,7 @@ import { embed } from "./embeddings.ts"
 import type { CachedAnswer } from "./exactCache.ts"
 import { namespaceFor } from "./namespace.ts"
 
-export const SIMILARITY_THRESHOLD = 0.95
+export const SIMILARITY_THRESHOLD = 0.9
 export const SEMANTIC_TTL_SECONDS = 3_600
 
 export type SemanticMatch = {
