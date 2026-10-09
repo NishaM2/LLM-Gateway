@@ -3,6 +3,7 @@ import { createApp } from "./app.ts"
 import { loadConfig, type Config } from "./config.ts"
 import { checkDatabase, createDb, createPool } from "./db.ts"
 import { connectCache, createCache } from "./redis.ts"
+import { startCleanup } from "./jobs/cleanup.ts"
 import { embed, EMBEDDING_MODEL } from "./services/embeddings.ts"
 
 if (existsSync(".env")) {
@@ -42,6 +43,7 @@ embed("warm up")
 
 const db = createDb(pool)
 const app = createApp(config, db, cache)
+startCleanup(db)
 
 
 app.listen(config.port, (error) => {

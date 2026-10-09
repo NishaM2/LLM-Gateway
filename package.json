@@ -15,6 +15,8 @@
     "db:migrate": "drizzle-kit migrate",
     "tenant:create": "tsx src/scripts/createTenant.ts",
     "redis:check": "tsx src/scripts/checkRedis.ts",
+    "cache:flush": "tsx src/scripts/flushNamespace.ts",
+    "semantic:check": "tsx src/scripts/checkSemanticCache.ts",
     "embeddings:check": "tsx src/scripts/checkEmbeddings.ts",
     "eval:sweep": "tsx evals/sweep.ts",
     "eval:sweep:guards": "tsx evals/sweep.ts --guards",

@@ -165,6 +165,23 @@ Embeddings are weak exactly where it hurts most: "What is 2+2?" and "What is 2+3
 
 Every lookup writes the best score it found to `semantic_similarity` on the log row, hit or miss, so real traffic shows how close the near misses were.
 
+### Expiry and clearing
+
+- **Entries live for an hour** (`SEMANTIC_TTL_SECONDS`). Lookups skip anything past its `expires_at`, so a stale answer is never served, even before it is deleted.
+- **A cleanup job** (`src/jobs/cleanup.ts`) deletes expired rows when the gateway starts and every ten minutes after that.
+- **`hit_count` goes up each time an entry is served**, so `SELECT prompt, hit_count FROM cache_entries ORDER BY hit_count DESC` shows which answers actually earn their keep.
+- **A whole namespace can be cleared at once**, for example when a tenant's facts change and every stored answer under that setup is now wrong:
+
+  ```
+  npm run cache:flush -- "Tenant name" path/to/request.json
+  ```
+
+  The request file is any request using the setup to clear (model, system prompt, tools, settings). The namespace is worked out from it, so nobody has to know the hash. Other namespaces are untouched.
+
+A tenant who simply edits their system prompt needs no flush: the new prompt produces a new namespace, the old entries stop matching straight away, and cleanup removes them within the hour.
+
+`npm run semantic:check` exercises all of this against the real database: hit counting, expiry, cleanup and flushing.
+
 The same no-cache rules apply as for the exact cache. On top of those, only plain text questions are matched by meaning: a message with an image, or a conversation that does not end with a user message, skips this step. Answers cut off by `max_tokens` (`finish_reason: length`) are stored in neither cache.
 
 Postgres narrows to the namespace first, using an ordinary index, and only then compares vectors. The HNSW vector index is there for the day one namespace holds thousands of entries. HNSW is approximate: it trades a perfect answer for a fast one. On its own it would find the nearest vectors across *all* namespaces and filter afterwards, which can leave nothing behind, so connections set `hnsw.iterative_scan = strict_order` to make it keep searching until it finds a match in the right namespace.

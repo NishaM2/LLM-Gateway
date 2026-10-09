@@ -14,7 +14,7 @@ import { completionFrom, replayAsStream } from "../services/cacheReplay.ts"
 import { cacheKeyFor, readAnswer, writeAnswer, type CachedAnswer } from "../services/exactCache.ts"
 import { elapsedMs, note, withLog } from "../services/requestLogger.ts"
 import type { Router } from "../services/router.ts"
-import { isSemanticHit, rememberAnswer, searchSemantic, type SemanticSearch } from "../services/semanticCache.ts"
+import { countHit, isSemanticHit, rememberAnswer, searchSemantic, type SemanticSearch } from "../services/semanticCache.ts"
 import { checkGuards } from "../services/semanticGuards.ts"
 
 export function chatRouter(modelRouter: Router, cache: Cache, db: Db): express.Router {
@@ -98,6 +98,7 @@ export function chatRouter(modelRouter: Router, cache: Cache, db: Db): express.R
         if (guard.ok) {
           console.log(`Semantic hit (${score}): "${search.question}" matched "${search.closest.prompt}"`)
           await serveCached(search.closest.answer, "semantic_hit")
+          await countHit(db, search.closest.id)
           return
         }
 

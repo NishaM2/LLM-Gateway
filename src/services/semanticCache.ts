@@ -60,7 +60,12 @@ export async function findClosest(db: Db, namespace: string, embedding: number[]
   }
 }
 
-export async function rememberAnswer(db: Db, search: SemanticSearch, answer: CachedAnswer): Promise<void> {
+export async function rememberAnswer(
+  db: Db,
+  search: SemanticSearch,
+  answer: CachedAnswer,
+  ttlSeconds: number = SEMANTIC_TTL_SECONDS,
+): Promise<void> {
   try {
     await db.insert(cacheEntries).values({
       namespace: search.namespace,
@@ -68,11 +73,30 @@ export async function rememberAnswer(db: Db, search: SemanticSearch, answer: Cac
       embedding: search.embedding,
       response: answer,
       model: answer.model,
-      expiresAt: new Date(Date.now() + SEMANTIC_TTL_SECONDS * 1000),
+      expiresAt: new Date(Date.now() + ttlSeconds * 1000),
     })
   } catch (error) {
     console.warn(`Could not save to the semantic cache: ${describe(error)}`)
   }
+}
+
+export async function countHit(db: Db, id: string): Promise<void> {
+  try {
+    await db
+      .update(cacheEntries)
+      .set({ hitCount: sql`${cacheEntries.hitCount} + 1` })
+      .where(eq(cacheEntries.id, id))
+  } catch (error) {
+    console.warn(`Could not count a semantic cache hit: ${describe(error)}`)
+  }
+}
+
+export async function flushNamespace(db: Db, namespace: string): Promise<number> {
+  const removed = await db
+    .delete(cacheEntries)
+    .where(eq(cacheEntries.namespace, namespace))
+    .returning({ id: cacheEntries.id })
+  return removed.length
 }
 
 export function finalQuestion(body: Record<string, unknown>): string | null {
