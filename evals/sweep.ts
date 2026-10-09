@@ -2,10 +2,14 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { cosineSimilarity, embed, EMBEDDING_MODEL } from "../src/services/embeddings.ts"
 import { SIMILARITY_THRESHOLD } from "../src/services/semanticCache.ts"
+import { checkGuards, MIN_WORD_OVERLAP, type GuardVerdict } from "../src/services/semanticGuards.ts"
 
 type Pair = { id: number; a: string; b: string; label: "same" | "different"; category: string; hard: boolean }
-type Scored = Pair & { similarity: number }
+type Scored = Pair & { similarity: number; guard: GuardVerdict }
 type Row = { threshold: number; caught: number; wrong: number; wrongKinds: string }
+
+const withGuards = process.argv.includes("--guards")
+const chartFile = withGuards ? "sweep-guarded.svg" : "sweep.svg"
 
 const { pairs } = JSON.parse(readFileSync(new URL("./pairs.json", import.meta.url), "utf8")) as { pairs: Pair[] }
 
@@ -23,19 +27,23 @@ async function vectorFor(text: string): Promise<number[]> {
 const scored: Scored[] = []
 for (const pair of pairs) {
   const similarity = cosineSimilarity(await vectorFor(pair.a), await vectorFor(pair.b))
-  scored.push({ ...pair, similarity })
+  scored.push({ ...pair, similarity, guard: checkGuards(pair.b, pair.a) })
 }
 
 const same = scored.filter((pair) => pair.label === "same")
 const different = scored.filter((pair) => pair.label === "different")
 
+function matches(pair: Scored, threshold: number): boolean {
+  return pair.similarity >= threshold && (!withGuards || pair.guard.ok)
+}
+
 const rows: Row[] = []
 for (let step = 80; step <= 99; step++) {
   const threshold = step / 100
-  const wrongPairs = different.filter((pair) => pair.similarity >= threshold)
+  const wrongPairs = different.filter((pair) => matches(pair, threshold))
   rows.push({
     threshold,
-    caught: same.filter((pair) => pair.similarity >= threshold).length,
+    caught: same.filter((pair) => matches(pair, threshold)).length,
     wrong: wrongPairs.length,
     wrongKinds: countKinds(wrongPairs),
   })
@@ -51,7 +59,8 @@ function percent(part: number, whole: number): string {
   return `${Math.round((part / whole) * 100)}%`
 }
 
-console.log(`\n${same.length} same-meaning pairs, ${different.length} different-meaning pairs. Current threshold: ${SIMILARITY_THRESHOLD}\n`)
+const guardsNote = withGuards ? `guards ON (minimum word overlap ${MIN_WORD_OVERLAP})` : "guards OFF"
+console.log(`\n${same.length} same-meaning pairs, ${different.length} different-meaning pairs. Current threshold: ${SIMILARITY_THRESHOLD}, ${guardsNote}\n`)
 console.log("| Threshold | Same caught | Different wrongly matched | Hits that were right | Wrong matches by kind |")
 console.log("| --- | --- | --- | --- | --- |")
 for (const row of rows) {
@@ -63,14 +72,24 @@ for (const row of rows) {
   )
 }
 
-function show(title: string, list: Scored[]): void {
+function show(title: string, list: Scored[], withReason = false): void {
   console.log(`\n${title}`)
+  if (list.length === 0) console.log("  none")
   for (const pair of list) {
-    console.log(`  ${pair.similarity.toFixed(3)}  #${pair.id} ${pair.category}: "${pair.a}" / "${pair.b}"`)
+    const reason = withReason && !pair.guard.ok ? `  [${pair.guard.reason}]` : ""
+    console.log(`  ${pair.similarity.toFixed(3)}  #${pair.id} ${pair.category}: "${pair.a}" / "${pair.b}"${reason}`)
   }
 }
 
-show("Most dangerous: different-meaning pairs that scored highest", [...different].sort((x, y) => y.similarity - x.similarity).slice(0, 12))
+if (withGuards) {
+  const nearby = (list: Scored[]) => list.filter((pair) => pair.similarity >= SIMILARITY_THRESHOLD).sort((x, y) => y.similarity - x.similarity)
+  show(`Wrong matches the guards stopped at ${SIMILARITY_THRESHOLD}`, nearby(different).filter((pair) => !pair.guard.ok), true)
+  show(`Wrong matches that still get through at ${SIMILARITY_THRESHOLD}`, nearby(different).filter((pair) => pair.guard.ok))
+  show(`Real rewordings the guards wrongly blocked at ${SIMILARITY_THRESHOLD}`, nearby(same).filter((pair) => !pair.guard.ok), true)
+}
+
+const dangerous = different.filter((pair) => !withGuards || pair.guard.ok)
+show("Most dangerous: different-meaning pairs that scored highest", [...dangerous].sort((x, y) => y.similarity - x.similarity).slice(0, 12))
 show("Hardest to catch: same-meaning pairs that scored lowest", [...same].sort((x, y) => x.similarity - y.similarity).slice(0, 8))
 
 console.log("\nHighest score per category of different-meaning pair")
@@ -80,8 +99,8 @@ for (const category of categories) {
   console.log(`  ${category.padEnd(10)} ${Math.max(...scores).toFixed(3)}`)
 }
 
-writeFileSync(new URL("./sweep.svg", import.meta.url), chart(rows, same.length, different.length))
-console.log("\nChart saved to evals/sweep.svg")
+writeFileSync(new URL(`./${chartFile}`, import.meta.url), chart(rows, same.length, different.length))
+console.log(`\nChart saved to evals/${chartFile}`)
 
 function chart(data: Row[], sameTotal: number, differentTotal: number): string {
   const width = 760
@@ -123,7 +142,7 @@ function chart(data: Row[], sameTotal: number, differentTotal: number): string {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="max-width:100%;height:auto" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="13" fill="#52514e">
 <rect width="${width}" height="${height}" fill="#fcfcfb"/>
-<text x="${left}" y="30" font-size="17" font-weight="600" fill="#0b0b0b">Semantic cache threshold sweep</text>
+<text x="${left}" y="30" font-size="17" font-weight="600" fill="#0b0b0b">Semantic cache threshold sweep, ${withGuards ? "with guards" : "embeddings only"}</text>
 <text x="${left}" y="52">${EMBEDDING_MODEL}, ${sameTotal} same-meaning and ${differentTotal} different-meaning pairs</text>
 <circle cx="${left + 5}" cy="76" r="5" fill="#2a78d6"/>
 <text x="${left + 16}" y="80" fill="#0b0b0b">Same meaning, correctly matched (good)</text>

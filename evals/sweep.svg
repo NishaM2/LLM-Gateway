@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 440" width="760" height="440" style="max-width:100%;height:auto" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="13" fill="#52514e">
 <rect width="760" height="440" fill="#fcfcfb"/>
-<text x="64" y="30" font-size="17" font-weight="600" fill="#0b0b0b">Semantic cache threshold sweep</text>
+<text x="64" y="30" font-size="17" font-weight="600" fill="#0b0b0b">Semantic cache threshold sweep, embeddings only</text>
 <text x="64" y="52">Xenova/all-MiniLM-L6-v2, 85 same-meaning and 115 different-meaning pairs</text>
 <circle cx="69" cy="76" r="5" fill="#2a78d6"/>
 <text x="80" y="80" fill="#0b0b0b">Same meaning, correctly matched (good)</text>

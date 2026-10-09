@@ -1,6 +1,61 @@
 # Semantic cache threshold: results
 
-**Decision: 0.90.** It is the lowest threshold at which every wrong match is a near-identical question that differs by a single word, number, name or date, which is exactly what the Step 34 guards are built to catch. At the same time it catches three times as many genuine rewordings as the 0.95 starting guess.
+**Decision: 0.90, always together with the guards.** It is the lowest threshold at which every wrong match is a near-identical question that differs by a single word, number, name or date, which is exactly what the guards are built to catch. At the same time it catches three times as many genuine rewordings as the 0.95 starting guess.
+
+**With the guards switched on, wrong matches at 0.90 fall from 30 to 3, while correct matches fall only from 33 to 27.** Of the hits served, 90% are right, up from 52%.
+
+| At 0.90 | Same caught | Different wrongly matched | Hits that were right |
+| --- | --- | --- | --- |
+| Embeddings only | 33 (39%) | 30 (26%) | 52% |
+| Embeddings + guards | 27 (32%) | 3 (3%) | 90% |
+
+![Threshold sweep with guards](sweep-guarded.svg)
+
+## The guards
+
+`src/services/semanticGuards.ts` runs after the similarity check and can only say no. Every check is a cheap, deterministic text comparison, and they are applied in this order:
+
+| Check | Rejects | Example it stops |
+| --- | --- | --- |
+| Numbers must match, in order | a different number | "3 ideas" / "10 ideas" |
+| Dates must match | a different day, month or "next/this week" | "Friday" / "Saturday" |
+| Names must match | a capitalised word missing from the other question | "Austria" / "Australia" |
+| Names in the same order | swapped names | "London to Paris" / "Paris to London" |
+| Direction | "x to y" against "y to x" | "string to a number" / "number to a string" |
+| Negation count | one side has not, no, without, n't and the other does not | "working" / "not working" |
+| Negating prefix | a word against un-, in-, il-, ir-, im-, dis-, non- plus that word | "legal" / "illegal" |
+| Word overlap of at least 0.4 | questions sharing too few meaningful words | "simple terms" / "technical detail" |
+
+Number words are turned into digits and "%" into "percent" first, so "15%" and "fifteen percent" count as the same thing.
+
+The overlap minimum of 0.4 was measured, not guessed. At 0.90 a minimum anywhere from 0 to 0.2 changes nothing, while 0.4 removes 2 more wrong matches at the cost of 3 correct ones. A wrong answer is worse than a miss, so 0.4 it is. At 0.5 it starts throwing away ordinary synonyms ("largest ocean" / "biggest ocean").
+
+Reproduce with `npm run eval:sweep:guards`.
+
+### What still gets through at 0.90
+
+| Score | Pair | Why the guards miss it |
+| --- | --- | --- |
+| 0.979 | Is a **whale** bigger than an **elephant**? / Is an **elephant** bigger than a **whale**? | the swapped words are ordinary nouns, not names, and the comparison uses "than" rather than "to" |
+| 0.976 | Write a **formal** / **casual** apology email | two different adjectives, which looks exactly like a synonym swap |
+| 0.961 | How do I zoom **in** / **out** on a PDF? | "in" and "out" are filler words to every check here |
+
+All three differ by words that are opposite in meaning, but nothing in the text says so. Catching them deterministically would need a list of opposites, which never ends. The production answer is a second model that reads both questions together (a cross-encoder or a small LLM judge), which costs a call per candidate hit.
+
+### What the guards wrongly block at 0.90
+
+| Score | Pair | Why |
+| --- | --- | --- |
+| 0.964 | What is the meaning of the word "ubiquitous"? / What does "ubiquitous" mean? | too few words in common |
+| 0.951 | What is the largest ocean? / Which ocean is the biggest? | too few words in common |
+| 0.947 | ...in **JavaScript**? / ...in **JS**? | an abbreviation looks like a different name |
+| 0.933 | ...in **JavaScript**? / ...in **JS**? | same |
+| 0.912 | Explain like I'm **five** / explained very simply | "five" is read as a number |
+| 0.908 | Is coffee bad for you? / Does drinking coffee harm your health? | too few words in common |
+
+These cost money, not correctness: the request goes to the provider and gets a fresh answer.
+
+## Embeddings only (Step 33)
 
 ![Threshold sweep](sweep.svg)
 
@@ -61,10 +116,10 @@ To this model, a sentence is mostly the bag of things it is about. Word order an
 The choice is made knowing that a wrong answer is far worse than a miss. A miss costs one provider call. A wrong answer is served confidently and the user has no way of telling.
 
 - **Below 0.89**, the wrong matches include whole different questions on the same topic. No cheap check can catch those, because the two questions share most of their words.
-- **At 0.90**, every wrong match is a one-word or one-number trap. Numbers, dates and names can be compared exactly, and negations and word order can be checked cheaply. That is the job of Step 34.
+- **At 0.90**, every wrong match is a one-word or one-number trap. Numbers, dates and names can be compared exactly, and negations and word order can be checked cheaply. That is the job of the guards.
 - **Above 0.90**, real hits fall away fast (13% at 0.95, 2% at 0.97) while the worst traps remain, so a higher threshold buys almost no safety.
 
-**This threshold is only acceptable together with the Step 34 guards.** On its own, 0.90 serves 30 wrong answers in this set. Until the guards are in place, the semantic cache should not be trusted.
+**This threshold is only acceptable together with the guards.** On its own, 0.90 serves 30 wrong answers in this set; with them, 3.
 
 ## Caveats
 

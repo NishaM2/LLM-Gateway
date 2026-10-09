@@ -15,6 +15,7 @@ import { cacheKeyFor, readAnswer, writeAnswer, type CachedAnswer } from "../serv
 import { elapsedMs, note, withLog } from "../services/requestLogger.ts"
 import type { Router } from "../services/router.ts"
 import { isSemanticHit, rememberAnswer, searchSemantic, type SemanticSearch } from "../services/semanticCache.ts"
+import { checkGuards } from "../services/semanticGuards.ts"
 
 export function chatRouter(modelRouter: Router, cache: Cache, db: Db): express.Router {
   const router = express.Router()
@@ -91,12 +92,20 @@ export function chatRouter(modelRouter: Router, cache: Cache, db: Db): express.R
       if (closest) note(res, { semanticSimilarity: closest.similarity })
 
       if (isSemanticHit(search)) {
-        console.log(`Semantic hit (${search.closest.similarity.toFixed(3)}): "${search.question}" matched "${search.closest.prompt}"`)
-        await serveCached(search.closest.answer, "semantic_hit")
-        return
+        const score = search.closest.similarity.toFixed(3)
+        const guard = checkGuards(search.question, search.closest.prompt)
+
+        if (guard.ok) {
+          console.log(`Semantic hit (${score}): "${search.question}" matched "${search.closest.prompt}"`)
+          await serveCached(search.closest.answer, "semantic_hit")
+          return
+        }
+
+        console.log(`Semantic match (${score}) rejected, ${guard.reason}: "${search.question}" vs "${search.closest.prompt}"`)
+      } else if (closest) {
+        console.log(`Semantic miss, closest was ${closest.similarity.toFixed(3)}: "${closest.prompt}"`)
       }
 
-      if (closest) console.log(`Semantic miss, closest was ${closest.similarity.toFixed(3)}: "${closest.prompt}"`)
       note(res, { cacheStatus: "miss" })
     }
 
