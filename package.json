@@ -20,6 +20,8 @@
     "embeddings:check": "tsx src/scripts/checkEmbeddings.ts",
     "eval:sweep": "tsx evals/sweep.ts",
     "eval:sweep:guards": "tsx evals/sweep.ts --guards",
+    "dashboard": "cd client && npm run dev",
+    "dashboard:install": "cd client && npm install",
     "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {

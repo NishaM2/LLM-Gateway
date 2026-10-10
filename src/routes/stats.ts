@@ -11,8 +11,10 @@ import {
   requestPage,
   savings,
   spendByDay,
+  summary,
 } from "../services/analytics.ts"
 import type { Router } from "../services/router.ts"
+import { startOfMonthUtc } from "../services/usage.ts"
 
 export const DEFAULT_DAYS = 30
 export const MAX_DAYS = 365
@@ -33,6 +35,10 @@ export function statsRouter(db: Db, modelRouter: Router, providerNames: Provider
 
   router.use(requireAdminToken(adminToken))
 
+  router.get("/summary", async (_req, res) => {
+    res.json(await summary(db, startOfMonthUtc(new Date())))
+  })
+
   router.get("/spend", async (req, res) => {
     const query = parse(windowQuery, req, res)
     if (!query) return
@@ -42,19 +48,19 @@ export function statsRouter(db: Db, modelRouter: Router, providerNames: Provider
   router.get("/hit-rate", async (req, res) => {
     const query = parse(windowQuery, req, res)
     if (!query) return
-    res.json({ days: query.days, ...(await hitRate(db, query.days)) })
+    res.json({ days: query.days, ...(await hitRate(db, daysAgo(query.days))) })
   })
 
   router.get("/savings", async (req, res) => {
     const query = parse(windowQuery, req, res)
     if (!query) return
-    res.json({ days: query.days, ...(await savings(db, query.days)) })
+    res.json({ days: query.days, ...(await savings(db, daysAgo(query.days))) })
   })
 
   router.get("/latency", async (req, res) => {
     const query = parse(windowQuery, req, res)
     if (!query) return
-    res.json({ days: query.days, groups: await latencyByCacheStatus(db, query.days) })
+    res.json({ days: query.days, groups: await latencyByCacheStatus(db, daysAgo(query.days)) })
   })
 
   router.get("/providers", (_req, res) => {
@@ -75,6 +81,10 @@ export function statsRouter(db: Db, modelRouter: Router, providerNames: Provider
   })
 
   return router
+}
+
+function daysAgo(days: number): Date {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 }
 
 function parse<T>(schema: z.ZodType<T>, req: Request, res: Response): T | null {

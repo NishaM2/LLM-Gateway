@@ -207,6 +207,7 @@ Read-only endpoints for the dashboard. They use their own `ADMIN_TOKEN` from `.e
 
 | Endpoint | Returns |
 | --- | --- |
+| `GET /stats/summary` | this month so far (UTC): spend, requests, hit rate, savings, median time to first token |
 | `GET /stats/spend?days=30` | cost and request count for every UTC day, including days with nothing |
 | `GET /stats/hit-rate?days=30` | exact, semantic, miss and skip counts with rates, overall and per day |
 | `GET /stats/savings?days=30` | what the cached hits would have cost, split by exact and semantic |
@@ -221,6 +222,20 @@ Read-only endpoints for the dashboard. They use their own `ADMIN_TOKEN` from `.e
 **Latency** only uses successful requests, because a fast 401 would drag the miss line down and flatter it.
 
 **The request list pages with a cursor, not an offset.** `OFFSET 10000` makes Postgres read and throw away 10,000 rows on every page, and rows arriving between pages shift everything along so rows get skipped or repeated. The cursor is the last row's `(created_at, id)`, and the next page asks for rows older than it, which the `requests_created_at_idx` index answers directly however long the table gets. The timestamp keeps its full microsecond precision inside the cursor, because JavaScript dates only hold milliseconds and two rows in the same millisecond would otherwise trip it up.
+
+## Dashboard
+
+A React app in `client/` that reads the `/stats` endpoints.
+
+```
+npm run dashboard:install   # once
+npm run dev                 # the gateway, in one terminal
+npm run dashboard           # the dashboard, in another, then open http://localhost:5173
+```
+
+The browser never sees the admin token. The dashboard's dev server forwards `/stats` calls to the gateway and adds `ADMIN_TOKEN` from the root `.env` on the way through, so the token stays on your machine. Point it at a gateway somewhere else with `GATEWAY_URL`.
+
+Every request gives up after 8 seconds, so there is never a spinner that spins forever. If the gateway is down, the dashboard says so and offers a retry. If it fails after a successful load, the last numbers stay on screen with a note that they are stale.
 
 ## Known limitations
 

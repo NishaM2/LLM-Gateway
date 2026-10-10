@@ -58,9 +58,6 @@ async function rows<T>(db: Db, query: SQL): Promise<T[]> {
   return result.rows as T[]
 }
 
-function since(days: number): SQL {
-  return sql`now() - make_interval(days => ${days})`
-}
 
 function toNumber(value: unknown): number {
   return Number(value ?? 0)
@@ -112,7 +109,7 @@ export async function spendByDay(db: Db, days: number): Promise<DaySpend[]> {
   return result.map((row) => ({ day: row.day, costMicros: toNumber(row.cost_micros), requests: row.requests }))
 }
 
-export async function hitRate(db: Db, days: number): Promise<HitRate> {
+export async function hitRate(db: Db, from: Date): Promise<HitRate> {
   const daily = await rows<{ day: string; exact: number; semantic: number; miss: number; skip: number }>(
     db,
     sql`
@@ -122,7 +119,7 @@ export async function hitRate(db: Db, days: number): Promise<HitRate> {
              count(*) FILTER (WHERE cache_status = 'miss')::int AS miss,
              count(*) FILTER (WHERE cache_status = 'skip')::int AS skip
       FROM requests
-      WHERE created_at >= ${since(days)} AND cache_status IS NOT NULL
+      WHERE created_at >= ${from} AND cache_status IS NOT NULL
       GROUP BY 1
       ORDER BY 1
     `,
@@ -146,7 +143,7 @@ export async function hitRate(db: Db, days: number): Promise<HitRate> {
   }
 }
 
-export async function savings(db: Db, days: number): Promise<Savings> {
+export async function savings(db: Db, from: Date): Promise<Savings> {
   const [row] = await rows<{
     hits: number
     unpriced_hits: number
@@ -170,7 +167,7 @@ export async function savings(db: Db, days: number): Promise<Savings> {
           ORDER BY mp.effective_from DESC
           LIMIT 1
         ) price ON true
-        WHERE r.cache_status IN ('hit', 'semantic_hit') AND r.created_at >= ${since(days)}
+        WHERE r.cache_status IN ('hit', 'semantic_hit') AND r.created_at >= ${from}
       )
       SELECT count(*)::int AS hits,
              count(*) FILTER (WHERE NOT has_price AND provider IS DISTINCT FROM 'mock')::int AS unpriced_hits,
@@ -190,7 +187,7 @@ export async function savings(db: Db, days: number): Promise<Savings> {
   }
 }
 
-export async function latencyByCacheStatus(db: Db, days: number): Promise<LatencyGroup[]> {
+export async function latencyByCacheStatus(db: Db, from: Date): Promise<LatencyGroup[]> {
   const result = await rows<Record<string, unknown>>(
     db,
     sql`
@@ -203,7 +200,7 @@ export async function latencyByCacheStatus(db: Db, days: number): Promise<Latenc
              percentile_cont(0.5) WITHIN GROUP (ORDER BY ttft_ms) AS ttft_p50,
              percentile_cont(0.95) WITHIN GROUP (ORDER BY ttft_ms) AS ttft_p95
       FROM requests
-      WHERE created_at >= ${since(days)}
+      WHERE created_at >= ${from}
         AND status <> 'error'
         AND cache_status IS NOT NULL
         AND latency_ms IS NOT NULL
@@ -222,6 +219,46 @@ export async function latencyByCacheStatus(db: Db, days: number): Promise<Latenc
     ttftP50: toNullableNumber(row.ttft_p50),
     ttftP95: toNullableNumber(row.ttft_p95),
   }))
+}
+
+export type Summary = {
+  from: string
+  spendMicros: number
+  requests: number
+  hitRate: number | null
+  hits: number
+  lookups: number
+  savedMicros: number
+  ttftP50: number | null
+  ttftSamples: number
+}
+
+export async function summary(db: Db, from: Date): Promise<Summary> {
+  const [totals] = await rows<{ spend_micros: string; requests: number; ttft_p50: unknown; ttft_samples: number }>(
+    db,
+    sql`
+      SELECT coalesce(sum(cost_micros), 0) AS spend_micros,
+             count(*)::int AS requests,
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY ttft_ms) FILTER (WHERE status <> 'error') AS ttft_p50,
+             count(ttft_ms) FILTER (WHERE status <> 'error')::int AS ttft_samples
+      FROM requests
+      WHERE created_at >= ${from}
+    `,
+  )
+  const rates = await hitRate(db, from)
+  const saved = await savings(db, from)
+
+  return {
+    from: from.toISOString(),
+    spendMicros: toNumber(totals?.spend_micros),
+    requests: totals?.requests ?? 0,
+    hitRate: rates.hitRate,
+    hits: rates.exact + rates.semantic,
+    lookups: rates.lookups,
+    savedMicros: saved.savedMicros,
+    ttftP50: toNullableNumber(totals?.ttft_p50),
+    ttftSamples: totals?.ttft_samples ?? 0,
+  }
 }
 
 export function encodeCursor(createdAt: string, id: string): string {
