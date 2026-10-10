@@ -6,24 +6,28 @@ export const requestStatus = pgEnum("request_status", ["ok", "error", "fallback"
 
 export const cacheStatus = pgEnum("cache_status", ["hit", "miss", "skip", "semantic_hit"])
 
-export const requests = pgTable("requests", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  modelRequested: text("model_requested"),
-  modelServed: text("model_served"),
-  provider: text("provider"),
-  tenantId: uuid("tenant_id").references(() => tenants.id),
-  status: requestStatus("status").notNull(),
-  attempts: integer("attempts"),
-  cacheStatus: cacheStatus("cache_status"),
-  semanticSimilarity: real("semantic_similarity"),
-  errorCode: text("error_code"),
-  inputTokens: integer("input_tokens"),
-  outputTokens: integer("output_tokens"),
-  costMicros: integer("cost_micros"),
-  latencyMs: integer("latency_ms"),
-  ttftMs: integer("ttft_ms"),
-})
+export const requests = pgTable(
+  "requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    modelRequested: text("model_requested"),
+    modelServed: text("model_served"),
+    provider: text("provider"),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    status: requestStatus("status").notNull(),
+    attempts: integer("attempts"),
+    cacheStatus: cacheStatus("cache_status"),
+    semanticSimilarity: real("semantic_similarity"),
+    errorCode: text("error_code"),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    costMicros: integer("cost_micros"),
+    latencyMs: integer("latency_ms"),
+    ttftMs: integer("ttft_ms"),
+  },
+  (table) => [index("requests_created_at_idx").on(table.createdAt, table.id)],
+)
 
 export const modelPrices = pgTable(
   "model_prices",

@@ -5,6 +5,7 @@ export type Config = {
   groqBaseUrl: string;
   geminiApiKey: string;
   redisUrl: string;
+  adminToken: string | null
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -32,6 +33,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     groqBaseUrl: env.GROQ_BASE_URL?.trim() || "https://api.groq.com/openai/v1",
     geminiApiKey: required("GEMINI_API_KEY"),
     redisUrl: env.REDIS_URL?.trim() || "redis://localhost:6379",
+    adminToken: env.ADMIN_TOKEN?.trim() || null,
   };
 
   if (problems.length > 0) {

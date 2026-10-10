@@ -41,6 +41,10 @@ embed("warm up")
   .then(() => console.log(`Loaded the embedding model ${EMBEDDING_MODEL}`))
   .catch((error) => console.warn(`Could not load the embedding model, the semantic cache will miss: ${error instanceof Error ? error.message : error}`))
 
+if (!config.adminToken) {
+  console.warn("ADMIN_TOKEN is not set, so the /stats endpoints are turned off")
+}
+
 const db = createDb(pool)
 const app = createApp(config, db, cache)
 startCleanup(db)

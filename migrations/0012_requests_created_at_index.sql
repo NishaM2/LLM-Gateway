@@ -1,0 +1,1 @@
+CREATE INDEX "requests_created_at_idx" ON "requests" USING btree ("created_at","id");

@@ -22,6 +22,7 @@ Run the checks with `npm test`. Check Redis separately with `npm run redis:check
 
 - `GET /health` - open, no key needed
 - `POST /v1/chat/completions` - needs `Authorization: Bearer <key>`, streaming supported
+- `GET /stats/...` - read-only numbers for the dashboard, needs `Authorization: Bearer <ADMIN_TOKEN>` (see [Stats](#stats))
 
 ## Model names
 
@@ -199,6 +200,27 @@ The key is printed once and only its SHA-256 hash is stored, so it cannot be rec
 Every request writes one row to `requests` after the reply has been sent: tenant, model, provider, status, token counts, cost in micro-dollars, total latency and time to first token. Prompt and reply text are never stored.
 
 If the caller disconnects, the gateway aborts its own request to the provider straight away, so no further tokens are generated for an answer nobody will read, and the row is recorded as `caller_hung_up`. The row is written only once the route handler has finished, so a late status change still lands.
+
+## Stats
+
+Read-only endpoints for the dashboard. They use their own `ADMIN_TOKEN` from `.env`, not a tenant key, because they show every tenant's traffic. Without `ADMIN_TOKEN` they answer 503. They are not written to the request log. `days` defaults to 30 and can be 1 to 365.
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /stats/spend?days=30` | cost and request count for every UTC day, including days with nothing |
+| `GET /stats/hit-rate?days=30` | exact, semantic, miss and skip counts with rates, overall and per day |
+| `GET /stats/savings?days=30` | what the cached hits would have cost, split by exact and semantic |
+| `GET /stats/latency?days=30` | p50, p95 and p99 latency, plus p50 and p95 time to first token, for each cache status |
+| `GET /stats/providers` | each provider's circuit breaker state right now |
+| `GET /stats/requests?limit=50&cursor=...` | newest requests first, one page at a time |
+
+**Hit rate** is hits divided by lookups, where a lookup is an exact hit, a semantic hit or a miss. Skipped requests never looked in the cache, so counting them would make the cache look worse than it is. With no lookups the rate is `null`, not 0.
+
+**Savings** prices each cached hit's token counts at the served model's price as it was on the day of the request, with the same per-side rounding as real costs. Hits on a model with no price on file are counted in `unpricedHits` rather than silently treated as free.
+
+**Latency** only uses successful requests, because a fast 401 would drag the miss line down and flatter it.
+
+**The request list pages with a cursor, not an offset.** `OFFSET 10000` makes Postgres read and throw away 10,000 rows on every page, and rows arriving between pages shift everything along so rows get skipped or repeated. The cursor is the last row's `(created_at, id)`, and the next page asks for rows older than it, which the `requests_created_at_idx` index answers directly however long the table gets. The timestamp keeps its full microsecond precision inside the cursor, because JavaScript dates only hold milliseconds and two rows in the same millisecond would otherwise trip it up.
 
 ## Known limitations
 
