@@ -5,13 +5,16 @@ import type { Db } from "../db.ts"
 import { requireAdminToken } from "../middleware/adminAuth.ts"
 import type { ProviderName } from "../models.ts"
 import {
+  CACHE_STATUSES,
   decodeCursor,
+  REQUEST_STATUSES,
   hitRate,
   latencyByCacheStatus,
   requestPage,
   savings,
   spendByDay,
   summary,
+  tenantOptions,
 } from "../services/analytics.ts"
 import type { Router } from "../services/router.ts"
 import { startOfMonthUtc } from "../services/usage.ts"
@@ -28,6 +31,9 @@ const windowQuery = z.object({
 const pageQuery = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   cursor: z.string().optional(),
+  tenant: z.uuid().optional(),
+  cacheStatus: z.enum(CACHE_STATUSES).optional(),
+  status: z.enum(REQUEST_STATUSES).optional(),
 })
 
 export function statsRouter(db: Db, modelRouter: Router, providerNames: ProviderName[], adminToken: string | null): express.Router {
@@ -63,6 +69,10 @@ export function statsRouter(db: Db, modelRouter: Router, providerNames: Provider
     res.json({ days: query.days, groups: await latencyByCacheStatus(db, daysAgo(query.days)) })
   })
 
+  router.get("/tenants", async (_req, res) => {
+    res.json({ tenants: await tenantOptions(db) })
+  })
+
   router.get("/providers", (_req, res) => {
     res.json({ providers: providerNames.map((provider) => ({ provider, circuit: modelRouter.breakerState(provider) })) })
   })
@@ -77,7 +87,8 @@ export function statsRouter(db: Db, modelRouter: Router, providerNames: Provider
       return
     }
 
-    res.json(await requestPage(db, { limit: query.limit, cursor }))
+    const filters = { tenantId: query.tenant, cacheStatus: query.cacheStatus, status: query.status }
+    res.json(await requestPage(db, { limit: query.limit, cursor, filters }))
   })
 
   return router

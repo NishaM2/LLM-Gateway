@@ -1,6 +1,8 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { decodeCursor, encodeCursor, ratesFor } from "./analytics.ts"
+import type { SQL } from "drizzle-orm"
+import { PgDialect } from "drizzle-orm/pg-core"
+import { decodeCursor, encodeCursor, ratesFor, requestConditions } from "./analytics.ts"
 
 test("hit rate counts exact and semantic hits against every lookup", () => {
   const rates = ratesFor({ exact: 2, semantic: 1, miss: 7, skip: 5 })
@@ -28,3 +30,23 @@ test("a damaged cursor is refused", () => {
   assert.equal(decodeCursor("not-a-cursor"), null)
   assert.equal(decodeCursor(Buffer.from(JSON.stringify(["yesterday", "x"])).toString("base64url")), null)
 })
+
+test("no filters and no cursor means no WHERE clause", () => {
+  assert.equal(toQuery(requestConditions({}, null)).sql.trim(), "")
+})
+
+test("filters become parameters joined with AND, never pasted into the SQL", () => {
+  const tenantId = "0f8c7a52-3c5e-4f7b-9d1a-2b6e8c4d5f60"
+  const query = toQuery(requestConditions({ tenantId, cacheStatus: "semantic_hit", status: "error" }, null))
+  assert.match(query.sql, /^where r\.tenant_id = \$1::uuid and r\.cache_status = \$2::cache_status and r\.status = \$3::request_status$/i)
+  assert.deepEqual(query.params, [tenantId, "semantic_hit", "error"])
+})
+
+test("the cursor comes first so paging and filters combine", () => {
+  const query = toQuery(requestConditions({ status: "error" }, { createdAt: "2026-10-13 09:15:42.123456+00", id: "0f8c7a52-3c5e-4f7b-9d1a-2b6e8c4d5f60" }))
+  assert.match(query.sql, /^where \(r\.created_at, r\.id\) < \(\$1::timestamptz, \$2::uuid\) and r\.status = \$3::request_status$/i)
+})
+
+function toQuery(fragment: SQL) {
+  return new PgDialect().sqlToQuery(fragment)
+}

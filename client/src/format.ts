@@ -30,3 +30,24 @@ export function lastDays(count: number): string[] {
   const start = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
   return Array.from({ length: count }, (_, index) => new Date(start - (count - 1 - index) * 86_400_000).toISOString().slice(0, 10))
 }
+
+export const CACHE_LABELS: Record<string, string> = {
+  hit: "Exact hit",
+  semantic_hit: "Semantic hit",
+  miss: "Miss",
+  skip: "Skipped",
+}
+
+export const STATUS_LABELS: Record<string, string> = {
+  ok: "OK",
+  fallback: "OK via fallback",
+  error: "Error",
+}
+
+export function cacheLabel(status: string | null): string {
+  return status === null ? "Not reached" : (CACHE_LABELS[status] ?? status)
+}
+
+export function formatTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" })
+}

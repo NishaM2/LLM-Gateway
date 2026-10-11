@@ -4,6 +4,7 @@ import { ChartCard } from "./components/ChartCard.tsx"
 import { ErrorBanner } from "./components/ErrorBanner.tsx"
 import { HitRateChart } from "./components/HitRateChart.tsx"
 import { LatencyChart } from "./components/LatencyChart.tsx"
+import { RequestLog } from "./components/RequestLog.tsx"
 import { SpendChart } from "./components/SpendChart.tsx"
 import { SummaryCard } from "./components/SummaryCard.tsx"
 import { formatCount, formatMicros, formatMs, formatPercent, monthName } from "./format.ts"
@@ -100,6 +101,8 @@ export function App() {
               {(data) => <HitRateChart daily={data.daily} days={CHART_DAYS} />}
             </ChartCard>
           </div>
+
+          <RequestLog refreshKey={refreshKey} />
         </>
       )}
     </main>

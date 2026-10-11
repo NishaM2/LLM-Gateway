@@ -35,6 +35,7 @@ export type LatencyGroup = {
 export type RequestRow = {
   id: string
   createdAt: string
+  tenantId: string | null
   tenant: string | null
   modelRequested: string | null
   modelServed: string | null
@@ -52,6 +53,17 @@ export type RequestRow = {
 }
 
 export type RequestPage = { requests: RequestRow[]; nextCursor: string | null }
+
+export const CACHE_STATUSES = ["hit", "semantic_hit", "miss", "skip"] as const
+export const REQUEST_STATUSES = ["ok", "error", "fallback"] as const
+
+export type RequestFilters = {
+  tenantId?: string
+  cacheStatus?: (typeof CACHE_STATUSES)[number]
+  status?: (typeof REQUEST_STATUSES)[number]
+}
+
+export type TenantOption = { id: string; name: string; requests: number }
 
 async function rows<T>(db: Db, query: SQL): Promise<T[]> {
   const result = await db.execute(query)
@@ -277,15 +289,39 @@ export function decodeCursor(cursor: string): { createdAt: string; id: string } 
   }
 }
 
-export async function requestPage(db: Db, options: { limit: number; cursor: { createdAt: string; id: string } | null }): Promise<RequestPage> {
-  const after = options.cursor
-    ? sql`WHERE (r.created_at, r.id) < (${options.cursor.createdAt}::timestamptz, ${options.cursor.id}::uuid)`
-    : sql``
+export async function tenantOptions(db: Db): Promise<TenantOption[]> {
+  const result = await rows<{ id: string; name: string; requests: number }>(
+    db,
+    sql`
+      SELECT t.id, t.name, count(r.id)::int AS requests
+      FROM tenants t
+      LEFT JOIN requests r ON r.tenant_id = t.id
+      GROUP BY t.id, t.name
+      ORDER BY t.name, t.id
+    `,
+  )
+  return result
+}
+
+export function requestConditions(filters: RequestFilters, cursor: { createdAt: string; id: string } | null): SQL {
+  const conditions: SQL[] = []
+  if (cursor) conditions.push(sql`(r.created_at, r.id) < (${cursor.createdAt}::timestamptz, ${cursor.id}::uuid)`)
+  if (filters.tenantId) conditions.push(sql`r.tenant_id = ${filters.tenantId}::uuid`)
+  if (filters.cacheStatus) conditions.push(sql`r.cache_status = ${filters.cacheStatus}::cache_status`)
+  if (filters.status) conditions.push(sql`r.status = ${filters.status}::request_status`)
+  return conditions.length === 0 ? sql`` : sql`WHERE ${sql.join(conditions, sql` AND `)}`
+}
+
+export async function requestPage(
+  db: Db,
+  options: { limit: number; cursor: { createdAt: string; id: string } | null; filters?: RequestFilters },
+): Promise<RequestPage> {
+  const after = requestConditions(options.filters ?? {}, options.cursor)
 
   const result = await rows<Record<string, unknown>>(
     db,
     sql`
-      SELECT r.id, r.created_at::text AS cursor_at, r.created_at, t.name AS tenant,
+      SELECT r.id, r.created_at::text AS cursor_at, r.created_at, r.tenant_id, t.name AS tenant,
              r.model_requested, r.model_served, r.provider, r.status::text AS status,
              r.cache_status::text AS cache_status, r.semantic_similarity, r.error_code, r.attempts,
              r.input_tokens, r.output_tokens, r.cost_micros, r.latency_ms, r.ttft_ms
@@ -305,6 +341,7 @@ export async function requestPage(db: Db, options: { limit: number; cursor: { cr
     requests: page.map((row) => ({
       id: String(row.id),
       createdAt: new Date(row.created_at as string | Date).toISOString(),
+      tenantId: (row.tenant_id as string | null) ?? null,
       tenant: (row.tenant as string | null) ?? null,
       modelRequested: (row.model_requested as string | null) ?? null,
       modelServed: (row.model_served as string | null) ?? null,

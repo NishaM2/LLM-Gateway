@@ -213,7 +213,8 @@ Read-only endpoints for the dashboard. They use their own `ADMIN_TOKEN` from `.e
 | `GET /stats/savings?days=30` | what the cached hits would have cost, split by exact and semantic |
 | `GET /stats/latency?days=30` | p50, p95 and p99 latency, plus p50 and p95 time to first token, for each cache status |
 | `GET /stats/providers` | each provider's circuit breaker state right now |
-| `GET /stats/requests?limit=50&cursor=...` | newest requests first, one page at a time |
+| `GET /stats/requests?limit=50&cursor=...` | newest requests first, one page at a time. Optional filters: `tenant` (id), `cacheStatus` (`hit`, `semantic_hit`, `miss`, `skip`), `status` (`ok`, `error`, `fallback`) |
+| `GET /stats/tenants` | every tenant with its request count, for the dashboard's filter |
 
 **Hit rate** is hits divided by lookups, where a lookup is an exact hit, a semantic hit or a miss. Skipped requests never looked in the cache, so counting them would make the cache look worse than it is. With no lookups the rate is `null`, not 0.
 
@@ -242,6 +243,8 @@ Below the four summary cards are three charts:
 - **Cache hit rate per day**, split into exact and semantic. Days without any cache lookups are left as gaps rather than drawn as 0%.
 
 To fill the charts with realistic traffic, `npm run traffic -- <tenant key>` sends 50 requests through the gateway: 20 new questions, 15 exact repeats, 10 rewordings and 5 at high temperature, half of them streamed. It uses `fast` (Groq) by default and pauses between provider calls to stay under the free-tier rate limit. Add `mock` after the key to use the mock provider instead.
+
+At the bottom is the **request log**: 25 requests a page, newest first, filtered by tenant, cache status and outcome. Filtering happens in SQL on the server, never by downloading everything and sorting it out in the browser, and the filters ride along with the paging cursor, so page 2 of "errors only" is still only errors. Clicking a row (or pressing Enter on it) opens a panel with everything recorded about that request: both model names, provider, attempts, tokens, cost, timings, error code, and the similarity score. For a semantic hit that score is the match that was served. For a miss it is the closest stored question that wasn't close enough.
 
 Every request gives up after 8 seconds, so there is never a spinner that spins forever. If the gateway is down, the dashboard says so and offers a retry. If it fails after a successful load, the last numbers stay on screen with a note that they are stale.
 

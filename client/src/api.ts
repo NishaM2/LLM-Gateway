@@ -72,3 +72,27 @@ function describeFailure(status: number, body: any): string {
   if (status >= 500) return "The gateway hit a problem while reading the stats. Check its console for details."
   return `Unexpected answer from the gateway (HTTP ${status}).`
 }
+
+export type RequestRow = {
+  id: string
+  createdAt: string
+  tenantId: string | null
+  tenant: string | null
+  modelRequested: string | null
+  modelServed: string | null
+  provider: string | null
+  status: string
+  cacheStatus: string | null
+  semanticSimilarity: number | null
+  errorCode: string | null
+  attempts: number | null
+  inputTokens: number | null
+  outputTokens: number | null
+  costMicros: number | null
+  latencyMs: number | null
+  ttftMs: number | null
+}
+export type RequestPage = { requests: RequestRow[]; nextCursor: string | null }
+
+export type TenantOption = { id: string; name: string; requests: number }
+export type TenantsResponse = { tenants: TenantOption[] }
