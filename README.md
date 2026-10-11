@@ -219,7 +219,7 @@ Read-only endpoints for the dashboard. They use their own `ADMIN_TOKEN` from `.e
 
 **Savings** prices each cached hit's token counts at the served model's price as it was on the day of the request, with the same per-side rounding as real costs. Hits on a model with no price on file are counted in `unpricedHits` rather than silently treated as free.
 
-**Latency** only uses successful requests, because a fast 401 would drag the miss line down and flatter it.
+**Latency** and the median time to first token only use successful requests, because a fast 401 would drag the miss line down and flatter it. They also leave out the mock provider, whose speed is made up: a mock "miss" answers in 70ms and would make real misses look as fast as cache hits.
 
 **The request list pages with a cursor, not an offset.** `OFFSET 10000` makes Postgres read and throw away 10,000 rows on every page, and rows arriving between pages shift everything along so rows get skipped or repeated. The cursor is the last row's `(created_at, id)`, and the next page asks for rows older than it, which the `requests_created_at_idx` index answers directly however long the table gets. The timestamp keeps its full microsecond precision inside the cursor, because JavaScript dates only hold milliseconds and two rows in the same millisecond would otherwise trip it up.
 
@@ -234,6 +234,14 @@ npm run dashboard           # the dashboard, in another, then open http://localh
 ```
 
 The browser never sees the admin token. The dashboard's dev server forwards `/stats` calls to the gateway and adds `ADMIN_TOKEN` from the root `.env` on the way through, so the token stays on your machine. Point it at a gateway somewhere else with `GATEWAY_URL`.
+
+Below the four summary cards are three charts:
+
+- **Response time, cached vs uncached.** Median and p95 latency for exact hits, semantic hits, misses and skipped requests. In a 50-request test against Groq, exact hits took a median 56ms and semantic hits 141ms, against 718ms for misses.
+- **Spend per day** over the last 30 days.
+- **Cache hit rate per day**, split into exact and semantic. Days without any cache lookups are left as gaps rather than drawn as 0%.
+
+To fill the charts with realistic traffic, `npm run traffic -- <tenant key>` sends 50 requests through the gateway: 20 new questions, 15 exact repeats, 10 rewordings and 5 at high temperature, half of them streamed. It uses `fast` (Groq) by default and pauses between provider calls to stay under the free-tier rate limit. Add `mock` after the key to use the mock provider instead.
 
 Every request gives up after 8 seconds, so there is never a spinner that spins forever. If the gateway is down, the dashboard says so and offers a retry. If it fails after a successful load, the last numbers stay on screen with a note that they are stale.
 

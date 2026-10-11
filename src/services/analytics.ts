@@ -202,6 +202,7 @@ export async function latencyByCacheStatus(db: Db, from: Date): Promise<LatencyG
       FROM requests
       WHERE created_at >= ${from}
         AND status <> 'error'
+        AND provider IS DISTINCT FROM 'mock'
         AND cache_status IS NOT NULL
         AND latency_ms IS NOT NULL
       GROUP BY cache_status
@@ -239,8 +240,8 @@ export async function summary(db: Db, from: Date): Promise<Summary> {
     sql`
       SELECT coalesce(sum(cost_micros), 0) AS spend_micros,
              count(*)::int AS requests,
-             percentile_cont(0.5) WITHIN GROUP (ORDER BY ttft_ms) FILTER (WHERE status <> 'error') AS ttft_p50,
-             count(ttft_ms) FILTER (WHERE status <> 'error')::int AS ttft_samples
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY ttft_ms) FILTER (WHERE status <> 'error' AND provider IS DISTINCT FROM 'mock') AS ttft_p50,
+             count(ttft_ms) FILTER (WHERE status <> 'error' AND provider IS DISTINCT FROM 'mock')::int AS ttft_samples
       FROM requests
       WHERE created_at >= ${from}
     `,

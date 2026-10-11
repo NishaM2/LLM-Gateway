@@ -192,3 +192,49 @@ button:focus-visible {
   margin: 0;
   color: var(--text-secondary);
 }
+
+.charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.chart-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 0;
+}
+
+.chart-card-wide {
+  grid-column: 1 / -1;
+}
+
+.chart-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.chart-description {
+  margin: 4px 0 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.chart-body {
+  min-height: 200px;
+}
+
+.chart-skeleton {
+  height: 220px;
+}
+
+.chart-message {
+  margin: 0;
+  padding: 80px 0;
+  text-align: center;
+  color: var(--text-muted);
+}

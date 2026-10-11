@@ -12,6 +12,33 @@ export type Summary = {
   ttftSamples: number
 }
 
+export type SpendDay = { day: string; costMicros: number; requests: number }
+export type SpendResponse = { days: number; spend: SpendDay[] }
+
+export type HitRateDay = {
+  day: string
+  exact: number
+  semantic: number
+  miss: number
+  skip: number
+  exactRate: number | null
+  semanticRate: number | null
+  hitRate: number | null
+}
+export type HitRateResponse = { days: number; daily: HitRateDay[] }
+
+export type LatencyGroup = {
+  cacheStatus: string
+  requests: number
+  latencyP50: number | null
+  latencyP95: number | null
+  latencyP99: number | null
+  ttftSamples: number
+  ttftP50: number | null
+  ttftP95: number | null
+}
+export type LatencyResponse = { days: number; groups: LatencyGroup[] }
+
 export class ApiError extends Error {
   constructor(message: string) {
     super(message)

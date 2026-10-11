@@ -20,3 +20,13 @@ export function formatCount(count: number, one: string, many: string): string {
 export function monthName(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" })
 }
+
+export function formatDay(day: string): string {
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" })
+}
+
+export function lastDays(count: number): string[] {
+  const today = new Date()
+  const start = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+  return Array.from({ length: count }, (_, index) => new Date(start - (count - 1 - index) * 86_400_000).toISOString().slice(0, 10))
+}
