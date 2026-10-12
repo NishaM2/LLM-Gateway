@@ -6,6 +6,7 @@ export type Config = {
   geminiApiKey: string;
   redisUrl: string;
   adminToken: string | null
+  statsPublic: boolean
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -34,6 +35,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     geminiApiKey: required("GEMINI_API_KEY"),
     redisUrl: env.REDIS_URL?.trim() || "redis://localhost:6379",
     adminToken: env.ADMIN_TOKEN?.trim() || null,
+    statsPublic: env.STATS_PUBLIC?.trim().toLowerCase() === "true",
   };
 
   if (problems.length > 0) {

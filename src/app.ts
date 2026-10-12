@@ -1,3 +1,5 @@
+import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 import express from "express"
 import type { Config } from "./config.ts"
 import type { Db } from "./db.ts"
@@ -24,7 +26,17 @@ export function createApp(config: Config, db: Db, cache: Cache) {
     res.json({ status: "ok" })
   })
 
-  app.use("/stats", statsRouter(db, modelRouter, Object.keys(providers) as ProviderName[], config.adminToken))
+  const webDir = fileURLToPath(new URL("../client/dist", import.meta.url))
+  app.use(express.static(webDir, { index: false, maxAge: "1h" }))
+  app.get(["/", "/dashboard"], (_req, res) => {
+    res.sendFile(join(webDir, "index.html"), (error) => {
+      if (error && !res.headersSent) {
+        res.status(404).type("text/plain").send("The web app has not been built yet. Run npm run web:build, or use npm run web while developing.")
+      }
+    })
+  })
+
+  app.use("/stats", statsRouter(db, modelRouter, Object.keys(providers) as ProviderName[], config.adminToken, config.statsPublic))
 
   app.use(requestLogging(db))
 

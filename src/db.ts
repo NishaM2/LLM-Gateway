@@ -6,7 +6,6 @@ export function createPool(databaseUrl: string): pg.Pool {
     connectionString: databaseUrl,
     max: 10,
     connectionTimeoutMillis: 5_000,
-    options: "-c hnsw.iterative_scan=strict_order",
   })
 
   pool.on("error", (error) => {

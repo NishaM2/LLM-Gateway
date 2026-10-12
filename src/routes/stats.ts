@@ -36,10 +36,16 @@ const pageQuery = z.object({
   status: z.enum(REQUEST_STATUSES).optional(),
 })
 
-export function statsRouter(db: Db, modelRouter: Router, providerNames: ProviderName[], adminToken: string | null): express.Router {
+export function statsRouter(
+  db: Db,
+  modelRouter: Router,
+  providerNames: ProviderName[],
+  adminToken: string | null,
+  statsPublic = false,
+): express.Router {
   const router = express.Router()
 
-  router.use(requireAdminToken(adminToken))
+  if (!statsPublic) router.use(requireAdminToken(adminToken))
 
   router.get("/summary", async (_req, res) => {
     res.json(await summary(db, startOfMonthUtc(new Date())))

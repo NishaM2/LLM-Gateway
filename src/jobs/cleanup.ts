@@ -2,7 +2,7 @@ import { lte, sql } from "drizzle-orm"
 import type { Db } from "../db.ts"
 import { cacheEntries } from "../schema.ts"
 
-export const CLEANUP_INTERVAL_MS = 10 * 60_000
+export const CLEANUP_INTERVAL_MS = 60 * 60_000
 
 export async function deleteExpired(db: Db): Promise<number> {
   const removed = await db

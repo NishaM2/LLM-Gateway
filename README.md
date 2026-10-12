@@ -169,7 +169,7 @@ Every lookup writes the best score it found to `semantic_similarity` on the log 
 ### Expiry and clearing
 
 - **Entries live for an hour** (`SEMANTIC_TTL_SECONDS`). Lookups skip anything past its `expires_at`, so a stale answer is never served, even before it is deleted.
-- **A cleanup job** (`src/jobs/cleanup.ts`) deletes expired rows when the gateway starts and every ten minutes after that.
+- **A cleanup job** (`src/jobs/cleanup.ts`) deletes expired rows when the gateway starts and every hour after that. Hourly rather than more often so a hosted database that sleeps when idle, such as Neon's free tier, is not kept awake by housekeeping.
 - **`hit_count` goes up each time an entry is served**, so `SELECT prompt, hit_count FROM cache_entries ORDER BY hit_count DESC` shows which answers actually earn their keep.
 - **A whole namespace can be cleared at once**, for example when a tenant's facts change and every stored answer under that setup is now wrong:
 
@@ -185,7 +185,7 @@ A tenant who simply edits their system prompt needs no flush: the new prompt pro
 
 The same no-cache rules apply as for the exact cache. On top of those, only plain text questions are matched by meaning: a message with an image, or a conversation that does not end with a user message, skips this step. Answers cut off by `max_tokens` (`finish_reason: length`) are stored in neither cache.
 
-Postgres narrows to the namespace first, using an ordinary index, and only then compares vectors. The HNSW vector index is there for the day one namespace holds thousands of entries. HNSW is approximate: it trades a perfect answer for a fast one. On its own it would find the nearest vectors across *all* namespaces and filter afterwards, which can leave nothing behind, so connections set `hnsw.iterative_scan = strict_order` to make it keep searching until it finds a match in the right namespace.
+Postgres narrows to the namespace first, using an ordinary index, and only then compares vectors. The HNSW vector index is there for the day one namespace holds thousands of entries. HNSW is approximate: it trades a perfect answer for a fast one. On its own it would find the nearest vectors across *all* namespaces and filter afterwards, which can leave nothing behind, so migration `0013` sets `hnsw.iterative_scan = strict_order` on the database itself, which makes it keep searching until it finds a match in the right namespace. Setting it on the database rather than per connection means it also survives a connection pooler such as Neon's.
 
 ## Tenants and keys
 
@@ -224,17 +224,32 @@ Read-only endpoints for the dashboard. They use their own `ADMIN_TOKEN` from `.e
 
 **The request list pages with a cursor, not an offset.** `OFFSET 10000` makes Postgres read and throw away 10,000 rows on every page, and rows arriving between pages shift everything along so rows get skipped or repeated. The cursor is the last row's `(created_at, id)`, and the next page asks for rows older than it, which the `requests_created_at_idx` index answers directly however long the table gets. The timestamp keeps its full microsecond precision inside the cursor, because JavaScript dates only hold milliseconds and two rows in the same millisecond would otherwise trip it up.
 
-## Dashboard
+## Web app: landing page and dashboard
 
-A React app in `client/` that reads the `/stats` endpoints.
+One React app in `client/`, with two pages: the landing page at `/` and the dashboard at `/dashboard`. The landing page's **Explore Dashboard** button opens the dashboard inside the same app, and the sun and moon button in the header switches between light and dark. The choice is remembered, and the first visit follows the system setting.
 
 ```
-npm run dashboard:install   # once
-npm run dev                 # the gateway, in one terminal
-npm run dashboard           # the dashboard, in another, then open http://localhost:5173
+client/src/
+  pages/                 LandingPage, DashboardPage
+  components/landing/    Hero, CodeSample, StatsStrip, RequestFlow, Results, Features, Closing
+  components/dashboard/  SummaryCard, the three charts, RequestLog, RequestDetail, ...
+  components/layout/     SiteHeader, SiteFooter, ThemeToggle
+  styles/                base (colours for both themes), landing, dashboard
 ```
 
-The browser never sees the admin token. The dashboard's dev server forwards `/stats` calls to the gateway and adds `ADMIN_TOKEN` from the root `.env` on the way through, so the token stays on your machine. Point it at a gateway somewhere else with `GATEWAY_URL`.
+While developing:
+
+```
+npm run web:install   # once
+npm run dev           # the gateway, in one terminal
+npm run web           # the web app, in another, then open http://localhost:5173
+```
+
+The dev server on 5173 forwards `/v1`, `/health` and `/stats` to the gateway. On `/stats` it adds `ADMIN_TOKEN` from the root `.env`, so the token never reaches the browser. Point it at a gateway somewhere else with `GATEWAY_URL`.
+
+In production there is no second server: `npm run web:build` writes the app to `client/dist`, and the gateway serves it at `/` and `/dashboard` from the same address as the API. The dashboard code is loaded only when someone opens it, so the landing page stays light.
+
+**Public demo mode.** Set `STATS_PUBLIC=true` and `/stats` no longer needs the admin token, so visitors can open the dashboard. The endpoints are read-only, but they show every tenant's name and traffic, so only turn it on when the data is demo data. `render.yaml` turns it on, because the deployed site is a demo.
 
 Below the four summary cards are three charts:
 
@@ -247,6 +262,28 @@ To fill the charts with realistic traffic, `npm run traffic -- <tenant key>` sen
 At the bottom is the **request log**: 25 requests a page, newest first, filtered by tenant, cache status and outcome. Filtering happens in SQL on the server, never by downloading everything and sorting it out in the browser, and the filters ride along with the paging cursor, so page 2 of "errors only" is still only errors. Clicking a row (or pressing Enter on it) opens a panel with everything recorded about that request: both model names, provider, attempts, tokens, cost, timings, error code, and the similarity score. For a semantic hit that score is the match that was served. For a miss it is the closest stored question that wasn't close enough.
 
 Every request gives up after 8 seconds, so there is never a spinner that spins forever. If the gateway is down, the dashboard says so and offers a retry. If it fails after a successful load, the last numbers stay on screen with a note that they are stale.
+
+## Deploying for free
+
+The gateway runs on three free tiers: **Render** for the server, **Neon** for Postgres with pgvector, and **Upstash** for Redis. `render.yaml` describes the service, so Render can set it up as a Blueprint.
+
+1. **Neon:** create a project and copy its connection string. Pooled or direct both work.
+2. **Migrations and a first tenant**, run from your machine against Neon. A `DATABASE_URL` set in the shell wins over the one in `.env`:
+
+   ```
+   $env:DATABASE_URL = "postgres://...neon.tech/neondb?sslmode=require"
+   npm run db:migrate
+   npm run tenant:create -- "Demo" 1.00
+   Remove-Item Env:DATABASE_URL
+   ```
+
+3. **Upstash:** create a Redis database and copy its `rediss://` URL.
+4. **Render:** New, then Blueprint, then pick this repository. Fill in `DATABASE_URL`, `REDIS_URL`, `GROQ_API_KEY` and `GEMINI_API_KEY`. `ADMIN_TOKEN` is generated for you.
+5. **Keep it awake:** a free Render service sleeps after 15 minutes without traffic and takes about a minute to wake. An uptime monitor (UptimeRobot's free plan works) calling `/health` every 10 minutes prevents that. `/health` does not touch the database, so Neon can still sleep between real requests and stays within its 100 free compute hours.
+
+Render builds the web app too, so the deployed address shows the landing page, and its Explore Dashboard button opens the live dashboard (public demo mode is on in `render.yaml`).
+
+**Free tier trade-offs:** the first request after a Neon sleep waits for the database to wake, Render has 512 MB of memory and can restart a free service at any time, and the embedding model (about 23 MB) is downloaded again on every restart, so the first semantic lookup after a restart is slow.
 
 ## Known limitations
 
