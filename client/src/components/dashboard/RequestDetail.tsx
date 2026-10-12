@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
-import type { RequestRow } from "../api.ts"
-import { cacheLabel, formatMicros, formatMs, STATUS_LABELS } from "../format.ts"
+import type { RequestRow } from "../../api.ts"
+import { cacheLabel, formatMicros, formatMs, STATUS_LABELS } from "../../format.ts"
 
 type Props = {
   request: RequestRow

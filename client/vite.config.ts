@@ -12,6 +12,8 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       proxy: {
+        "/v1": { target: gateway, changeOrigin: true },
+        "/health": { target: gateway, changeOrigin: true },
         "/stats": {
           target: gateway,
           changeOrigin: true,

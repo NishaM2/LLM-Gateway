@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import type { StatsState } from "../useStats.ts"
+import type { StatsState } from "../../useStats.ts"
 
 type Props<T> = {
   title: string

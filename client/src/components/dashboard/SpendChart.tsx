@@ -1,7 +1,7 @@
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import type { SpendDay } from "../api.ts"
-import { formatDay, formatMicros } from "../format.ts"
-import { useChartColors } from "../theme.ts"
+import type { SpendDay } from "../../api.ts"
+import { formatDay, formatMicros } from "../../format.ts"
+import { useChartColors } from "../../theme.tsx"
 
 export function SpendChart({ spend }: { spend: SpendDay[] }) {
   const colors = useChartColors()

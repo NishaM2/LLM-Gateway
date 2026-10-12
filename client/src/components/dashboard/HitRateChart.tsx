@@ -1,7 +1,7 @@
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import type { HitRateDay } from "../api.ts"
-import { formatDay, formatPercent, lastDays } from "../format.ts"
-import { useChartColors } from "../theme.ts"
+import type { HitRateDay } from "../../api.ts"
+import { formatDay, formatPercent, lastDays } from "../../format.ts"
+import { useChartColors } from "../../theme.tsx"
 
 export function HitRateChart({ daily, days }: { daily: HitRateDay[]; days: number }) {
   const colors = useChartColors()

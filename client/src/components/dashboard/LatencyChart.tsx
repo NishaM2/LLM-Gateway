@@ -1,7 +1,7 @@
 import { Bar, BarChart, CartesianGrid, LabelList, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import type { LatencyGroup } from "../api.ts"
-import { formatMs } from "../format.ts"
-import { useChartColors } from "../theme.ts"
+import type { LatencyGroup } from "../../api.ts"
+import { formatMs } from "../../format.ts"
+import { useChartColors } from "../../theme.tsx"
 
 const ORDER = ["hit", "semantic_hit", "miss", "skip"]
 

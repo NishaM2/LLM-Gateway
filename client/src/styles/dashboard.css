@@ -1,61 +1,13 @@
-:root {
-  color-scheme: light;
-  --surface-page: #f6f5f2;
-  --surface-card: #fcfcfb;
-  --border: #e4e3df;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted: #6d6c67;
-  --accent: #2a78d6;
-  --accent-text: #ffffff;
-  --skeleton: #ebeae6;
-  --skeleton-shine: #f6f5f2;
-  --error-surface: #fbeaea;
-  --error-border: #d03b3b;
-  --selected: #e7f0fb;
-  --status-good: #0ca30c;
-  --status-warning: #fab219;
-  --status-critical: #d03b3b;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --surface-page: #121211;
-    --surface-card: #1a1a19;
-    --border: #2f2f2d;
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #9c9b93;
-    --accent: #3987e5;
-    --accent-text: #ffffff;
-    --skeleton: #262624;
-    --skeleton-shine: #2f2f2d;
-    --error-surface: #2d1a1a;
-    --error-border: #e66767;
-    --selected: #1c2a3d;
-    --status-good: #0ca30c;
-    --status-warning: #fab219;
-    --status-critical: #d03b3b;
-  }
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--surface-page);
-  color: var(--text-primary);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  line-height: 1.4;
-}
-
 .page {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 32px 16px 48px;
+  padding: 32px 24px 16px;
+}
+
+@media (max-width: 560px) {
+  .page {
+    padding: 24px 16px 8px;
+  }
 }
 
 .header {
@@ -67,7 +19,7 @@ body {
   margin-bottom: 24px;
 }
 
-h1 {
+.page h1 {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
@@ -89,7 +41,7 @@ h1 {
   font-size: 13px;
 }
 
-button {
+.page button {
   font: inherit;
   font-size: 14px;
   padding: 8px 14px;
@@ -100,12 +52,12 @@ button {
   cursor: pointer;
 }
 
-button:disabled {
+.page button:disabled {
   opacity: 0.6;
   cursor: default;
 }
 
-button:focus-visible {
+.page button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -247,13 +199,13 @@ button:focus-visible {
   color: var(--text-muted);
 }
 
-.button-quiet {
+.page .button-quiet {
   background: transparent;
   color: var(--text-primary);
   border-color: var(--border);
 }
 
-.button-quiet:disabled {
+.page .button-quiet:disabled {
   opacity: 0.45;
 }
 

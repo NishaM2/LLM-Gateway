@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react"
-import type { RequestPage, TenantsResponse } from "../api.ts"
-import { CACHE_LABELS, cacheLabel, formatMicros, formatMs, formatTime, STATUS_LABELS } from "../format.ts"
-import { useStats } from "../useStats.ts"
+import type { RequestPage, TenantsResponse } from "../../api.ts"
+import { CACHE_LABELS, cacheLabel, formatMicros, formatMs, formatTime, STATUS_LABELS } from "../../format.ts"
+import { useStats } from "../../useStats.ts"
 import { RequestDetail } from "./RequestDetail.tsx"
 
 const PAGE_SIZE = 25
