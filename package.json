@@ -12,7 +12,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "tsx src/scripts/migrate.ts",
     "tenant:create": "tsx src/scripts/createTenant.ts",
     "redis:check": "tsx src/scripts/checkRedis.ts",
     "cache:flush": "tsx src/scripts/flushNamespace.ts",

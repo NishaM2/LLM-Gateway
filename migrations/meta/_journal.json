@@ -99,6 +99,13 @@
       "when": 1791878488353,
       "tag": "0013_hnsw_iterative_scan",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791899058960,
+      "tag": "0014_seed_model_prices",
+      "breakpoints": true
     }
   ]
 }
