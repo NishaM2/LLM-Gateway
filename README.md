@@ -281,7 +281,7 @@ The gateway runs on three free tiers: **Render** for the server, **Neon** for Po
 4. **Render:** New, then Blueprint, then pick this repository. Fill in `DATABASE_URL`, `REDIS_URL`, `GROQ_API_KEY` and `GEMINI_API_KEY`. `ADMIN_TOKEN` is generated for you.
 5. **Keep it awake:** a free Render service sleeps after 15 minutes without traffic and takes about a minute to wake. An uptime monitor (UptimeRobot's free plan works) calling `/health` every 10 minutes prevents that. `/health` does not touch the database, so Neon can still sleep between real requests and stays within its 100 free compute hours.
 
-Render builds the web app too, so the deployed address shows the landing page, and its Explore Dashboard button opens the live dashboard (public demo mode is on in `render.yaml`).
+The web app is deployed separately on Vercel (project root `client`). `client/vercel.json` forwards `/stats`, `/v1` and `/health` to the Render address, so the browser only ever talks to one address and no CORS setup is needed. Put your Render address into that file before deploying. Public demo mode is on in `render.yaml`, which is what lets visitors open the dashboard.
 
 **Free tier trade-offs:** the first request after a Neon sleep waits for the database to wake, Render has 512 MB of memory and can restart a free service at any time, and the embedding model (about 23 MB) is downloaded again on every restart, so the first semantic lookup after a restart is slow.
 
