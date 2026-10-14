@@ -9,7 +9,7 @@
 | Embeddings only | 33 (39%) | 30 (26%) | 52% |
 | Embeddings + guards | 27 (32%) | 3 (3%) | 90% |
 
-![Threshold sweep with guards](sweep-guarded.svg)
+![Threshold sweep with guards](../docs/threshold-sweep-guarded.svg)
 
 ## The guards
 
@@ -57,7 +57,7 @@ These cost money, not correctness: the request goes to the provider and gets a f
 
 ## Embeddings only (Step 33)
 
-![Threshold sweep](sweep.svg)
+![Threshold sweep](../docs/threshold-sweep.svg)
 
 ## Setup
 

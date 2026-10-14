@@ -9,7 +9,7 @@ type Scored = Pair & { similarity: number; guard: GuardVerdict }
 type Row = { threshold: number; caught: number; wrong: number; wrongKinds: string }
 
 const withGuards = process.argv.includes("--guards")
-const chartFile = withGuards ? "sweep-guarded.svg" : "sweep.svg"
+const chartFile = withGuards ? "threshold-sweep-guarded.svg" : "threshold-sweep.svg"
 
 const { pairs } = JSON.parse(readFileSync(new URL("./pairs.json", import.meta.url), "utf8")) as { pairs: Pair[] }
 
@@ -99,8 +99,8 @@ for (const category of categories) {
   console.log(`  ${category.padEnd(10)} ${Math.max(...scores).toFixed(3)}`)
 }
 
-writeFileSync(new URL(`./${chartFile}`, import.meta.url), chart(rows, same.length, different.length))
-console.log(`\nChart saved to evals/${chartFile}`)
+writeFileSync(new URL(`../docs/${chartFile}`, import.meta.url), chart(rows, same.length, different.length))
+console.log(`\nChart saved to docs/${chartFile}`)
 
 function chart(data: Row[], sameTotal: number, differentTotal: number): string {
   const width = 760

@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="960" height="560" style="max-width:100%;height:auto" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="13" fill="#121211">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#6f6e68"/>
+    </marker>
+  </defs>
+
+  <rect width="960" height="560" rx="16" fill="#fcfcfb"/>
+
+  <text x="24" y="36" font-size="18" font-weight="600">LLM Gateway: the path of one request</text>
+  <text x="24" y="58" fill="#52514e">Each stage either answers or hands on to the next, so the paid provider call comes last.</text>
+
+  <rect x="14" y="110" width="152" height="74" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
+  <text x="90" y="141" text-anchor="middle" font-weight="600">Your app</text>
+  <text x="90" y="161" text-anchor="middle" fill="#52514e" font-size="12">OpenAI SDK, new baseURL</text>
+  <line x1="166" y1="135" x2="198" y2="135" stroke="#6f6e68" stroke-width="1.5" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+
+  <rect x="180" y="72" width="560" height="380" rx="14" fill="#f3f2ee" stroke="#e3e1db"/>
+  <text x="200" y="96" fill="#52514e" font-size="12">Gateway · Node 22 · Express 5 · TypeScript</text>
+
+  <g>
+    <rect x="200" y="110" width="520" height="50" rx="10" fill="#ffffff" stroke="#e3e1db"/>
+    <rect x="212" y="123" width="24" height="24" rx="6" fill="#2a78d6"/>
+    <text x="224" y="140" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="600">1</text>
+    <text x="248" y="140" font-weight="600">Key and budget</text>
+    <text x="380" y="140" fill="#52514e" font-size="12">hashed key → tenant · monthly budget</text>
+    <text x="708" y="140" text-anchor="end" fill="#c4362f" font-size="12" font-weight="600">refuse → 401 / 402</text>
+  </g>
+  <line x1="226" y1="160" x2="226" y2="171" stroke="#6f6e68" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="200" y="172" width="520" height="50" rx="10" fill="#ffffff" stroke="#e3e1db"/>
+    <rect x="212" y="185" width="24" height="24" rx="6" fill="#2a78d6"/>
+    <text x="224" y="202" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="600">2</text>
+    <text x="248" y="202" font-weight="600">Exact cache</text>
+    <text x="380" y="202" fill="#52514e" font-size="12">SHA-256 of the canonical request</text>
+    <text x="708" y="202" text-anchor="end" fill="#0b8a0b" font-size="12" font-weight="600">hit → answer</text>
+  </g>
+  <line x1="226" y1="222" x2="226" y2="233" stroke="#6f6e68" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="200" y="234" width="520" height="50" rx="10" fill="#ffffff" stroke="#e3e1db"/>
+    <rect x="212" y="247" width="24" height="24" rx="6" fill="#2a78d6"/>
+    <text x="224" y="264" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="600">3</text>
+    <text x="248" y="264" font-weight="600">Semantic cache</text>
+    <text x="380" y="264" fill="#52514e" font-size="12">local embedding · nearest in namespace</text>
+    <text x="708" y="264" text-anchor="end" fill="#52514e" font-size="12" font-weight="600">≥ 0.90 → guards</text>
+  </g>
+  <line x1="226" y1="284" x2="226" y2="295" stroke="#6f6e68" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="200" y="296" width="520" height="50" rx="10" fill="#ffffff" stroke="#e3e1db"/>
+    <rect x="212" y="309" width="24" height="24" rx="6" fill="#2a78d6"/>
+    <text x="224" y="326" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="600">4</text>
+    <text x="248" y="326" font-weight="600">Guards</text>
+    <text x="380" y="326" fill="#52514e" font-size="12">numbers · dates · names · negation · order</text>
+    <text x="708" y="326" text-anchor="end" fill="#0b8a0b" font-size="12" font-weight="600">pass → answer</text>
+  </g>
+  <line x1="226" y1="346" x2="226" y2="357" stroke="#6f6e68" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="200" y="358" width="520" height="50" rx="10" fill="#ffffff" stroke="#e3e1db"/>
+    <rect x="212" y="371" width="24" height="24" rx="6" fill="#2a78d6"/>
+    <text x="224" y="388" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="600">5</text>
+    <text x="248" y="388" font-weight="600">Router</text>
+    <text x="380" y="388" fill="#52514e" font-size="12">retries · fallback · circuit breaker</text>
+    <text x="708" y="388" text-anchor="end" fill="#52514e" font-size="12" font-weight="600">→ provider</text>
+  </g>
+
+  <text x="200" y="436" fill="#52514e" font-size="12">Every request, whichever stage answered, becomes one row in the request log: tokens, cost, latency.</text>
+
+  <line x1="720" y1="197" x2="778" y2="197" stroke="#6f6e68" stroke-width="1.5" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+  <line x1="720" y1="259" x2="778" y2="259" stroke="#6f6e68" stroke-width="1.5" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+  <line x1="720" y1="383" x2="778" y2="383" stroke="#6f6e68" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="780" y="172" width="156" height="50" rx="10" fill="#eef4fc" stroke="#b7d3f6"/>
+  <text x="858" y="193" text-anchor="middle" font-weight="600">Redis</text>
+  <text x="858" y="211" text-anchor="middle" fill="#52514e" font-size="12">exact answers, 10 min</text>
+
+  <rect x="780" y="234" width="156" height="112" rx="10" fill="#eef4fc" stroke="#b7d3f6"/>
+  <text x="858" y="257" text-anchor="middle" font-weight="600">Postgres + pgvector</text>
+  <text x="858" y="279" text-anchor="middle" fill="#52514e" font-size="12">semantic cache entries</text>
+  <text x="858" y="297" text-anchor="middle" fill="#52514e" font-size="12">tenants · keys · budgets</text>
+  <text x="858" y="315" text-anchor="middle" fill="#52514e" font-size="12">model prices</text>
+  <text x="858" y="333" text-anchor="middle" fill="#52514e" font-size="12">request log</text>
+
+  <rect x="780" y="358" width="156" height="82" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
+  <text x="858" y="381" text-anchor="middle" font-weight="600">Providers</text>
+  <text x="858" y="401" text-anchor="middle" fill="#52514e" font-size="12">Groq · Gemini</text>
+  <text x="858" y="419" text-anchor="middle" fill="#52514e" font-size="12">Mock (fault injection)</text>
+
+  <line x1="460" y1="482" x2="460" y2="454" stroke="#6f6e68" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="180" y="484" width="560" height="56" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
+  <text x="200" y="507" font-weight="600">Web app · React on Vercel</text>
+  <text x="200" y="527" fill="#52514e" font-size="12">Landing page and dashboard, reading GET /stats: spend, hit rate, savings, latency, request log</text>
+</svg>
