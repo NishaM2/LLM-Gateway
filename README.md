@@ -82,7 +82,7 @@ The guards are plain text checks that take about 50 microseconds per comparison.
 You need Node 22 or newer, Docker Desktop, and free API keys from [Groq](https://console.groq.com) and [Google AI Studio](https://aistudio.google.com) (Gemini). The mock provider works without any key.
 
 ```
-git clone https://github.com/NishaM2/LLM-Gateway.git
+git clone https://github.com/NishaM2/Route-AI.git
 cd LLM-Gateway
 npm install
 cp .env.example .env               # then fill in GROQ_API_KEY and GEMINI_API_KEY
